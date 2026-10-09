@@ -5,6 +5,8 @@ import { formatCurrency, generateWhatsAppLink } from "@/lib/utils";
 import { Modal } from "./ui/modal";
 import { Pagination } from "./ui/pagination";
 import { ImageUpload } from "./ui/image-upload";
+import { CategoriesModal } from "./categories-modal";
+import { CategoryItem } from "@/actions/categories";
 import {
   createProduct,
   updateProduct,
@@ -28,17 +30,26 @@ import {
   Banknote,
   CreditCard,
   ShoppingBag,
+  Tag,
 } from "lucide-react";
 
 interface ProductsViewProps {
   initialProducts: any[];
   suppliers: any[];
+  initialCategories?: CategoryItem[];
 }
 
-export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) {
+export function ProductsView({
+  initialProducts,
+  suppliers,
+  initialCategories = [],
+}: ProductsViewProps) {
   const [products, setProducts] = useState(initialProducts);
+  const [categories, setCategories] = useState<CategoryItem[]>(initialCategories);
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("todas");
+  const [filterSubcategory, setFilterSubcategory] = useState("todas");
   const [filterStock, setFilterStock] = useState<string>("todos");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -49,6 +60,7 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Colchones");
+  const [subcategory, setSubcategory] = useState("");
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
   const [stock, setStock] = useState<number>(1);
   const [costPrice, setCostPrice] = useState<number>(0);
@@ -77,20 +89,18 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
     setProducts(initialProducts);
   }, [initialProducts]);
 
-  const categories = [
-    "Colchones",
-    "Celulares & Tecnología",
-    "Electrodomésticos",
-    "Muebles & Hogar",
-    "Herramientas",
-    "Varios",
-  ];
+  React.useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      setCategories(initialCategories);
+    }
+  }, [initialCategories]);
 
   const openCreateModal = () => {
     setEditingProduct(null);
     setName("");
     setDescription("");
-    setCategory("Colchones");
+    setCategory(categories[0]?.name || "Colchones");
+    setSubcategory("");
     setCurrency("ARS");
     setStock(1);
     setCostPrice(0);
@@ -110,6 +120,7 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
     setName(prod.name);
     setDescription(prod.description || "");
     setCategory(prod.category);
+    setSubcategory(prod.subcategory || "");
     setCurrency(prod.currency || "ARS");
     setStock(prod.stock !== undefined ? Number(prod.stock) : 1);
     setCostPrice(parseFloat(prod.costPrice || "0"));
@@ -219,6 +230,7 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
           name,
           description,
           category,
+          subcategory: subcategory.trim() || undefined,
           currency,
           stock: Number(stock),
           costPrice: Number(costPrice),
@@ -243,6 +255,7 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
           name,
           description,
           category,
+          subcategory: subcategory.trim() || undefined,
           currency,
           stock: Number(stock),
           costPrice: Number(costPrice),
@@ -285,6 +298,7 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
 
   const filtered = products.filter((p) => {
     const matchesCat = filterCategory === "todas" ? true : p.category === filterCategory;
+    const matchesSub = filterSubcategory === "todas" ? true : p.subcategory === filterSubcategory;
     const matchesSearch =
       !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -298,10 +312,13 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
         : filterStock === "agotados"
         ? pStock <= 0
         : pStock > 1;
-    return matchesCat && matchesSearch && matchesStock;
+    return matchesCat && matchesSub && matchesSearch && matchesStock;
   });
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const selectedCategoryObj = categories.find((c) => c.name === filterCategory);
+  const subcategoriesForFilter = selectedCategoryObj?.subcategories || [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -316,13 +333,25 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
           </p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition self-start sm:self-auto cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          + Agregar Producto
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsCategoriesModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white dark:bg-[#1E293B] hover:bg-slate-100 dark:hover:bg-slate-800 text-[#1E293B] dark:text-[#F8FAFC] font-bold text-xs border border-[#E5E7EB] dark:border-[#334155] shadow-2xs transition cursor-pointer"
+            title="Crear y organizar categorías y subcategorías"
+          >
+            <Tag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>🏷️ Categorías</span>
+          </button>
+
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Agregar Producto</span>
+          </button>
+        </div>
       </div>
 
       {/* FILTROS Y BÚSQUEDA */}
@@ -342,21 +371,42 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
             />
           </div>
 
-          <select
-            value={filterCategory}
-            onChange={(e) => {
-              setFilterCategory(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-3 py-2.5 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#1E293B] dark:text-[#F8FAFC] text-xs font-medium self-start outline-hidden"
-          >
-            <option value="todas">Todas las categorías</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={filterCategory}
+              onChange={(e) => {
+                setFilterCategory(e.target.value);
+                setFilterSubcategory("todas");
+                setCurrentPage(1);
+              }}
+              className="px-3 py-2.5 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-white dark:bg-[#1E293B] text-[#1E293B] dark:text-[#F8FAFC] text-xs font-medium outline-hidden"
+            >
+              <option value="todas">Todas las categorías</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            {filterCategory !== "todas" && subcategoriesForFilter.length > 0 && (
+              <select
+                value={filterSubcategory}
+                onChange={(e) => {
+                  setFilterSubcategory(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-2.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs font-semibold outline-hidden"
+              >
+                <option value="todas">Todos los tipos</option>
+                {subcategoriesForFilter.map((sub) => (
+                  <option key={sub.id} value={sub.name}>
+                    {sub.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
         {/* PESTAÑAS DE NIVEL DE STOCK / REPOSICIÓN URGENTE */}
@@ -466,6 +516,9 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                         {prod.category}
+                        {prod.subcategory ? (
+                          <span className="text-slate-400 dark:text-slate-500 font-semibold"> • {prod.subcategory}</span>
+                        ) : null}
                       </span>
                       <h3 className="font-bold text-[#1E293B] dark:text-[#F8FAFC] text-base leading-tight mt-0.5">
                         {prod.name}
@@ -679,19 +732,31 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#1E293B] dark:text-[#F8FAFC] mb-1">
-                Categoría
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[#1E293B] dark:text-[#F8FAFC]">
+                  Categoría Principal *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCategoriesModalOpen(true)}
+                  className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  + Gestionar
+                </button>
+              </div>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-[#F4F6F9] dark:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] text-xs"
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setSubcategory("");
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-[#F4F6F9] dark:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] text-xs font-bold"
               >
                 {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                  <option key={c.id} value={c.name}>
+                    {c.name}
                   </option>
                 ))}
               </select>
@@ -699,21 +764,41 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
 
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] dark:text-[#F8FAFC] mb-1">
-                Proveedor
+                Subcategoría / Tipo (opcional)
               </label>
               <select
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
+                value={subcategory}
+                onChange={(e) => setSubcategory(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-[#F4F6F9] dark:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] text-xs"
               >
-                <option value="">-- Sin proveedor asignado --</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
+                <option value="">-- Sin subcategoría --</option>
+                {categories
+                  .find((c) => c.name === category)
+                  ?.subcategories.map((sub) => (
+                    <option key={sub.id} value={sub.name}>
+                      {sub.name}
+                    </option>
+                  ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-[#F8FAFC] mb-1">
+              Proveedor (opcional)
+            </label>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-[#F4F6F9] dark:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] text-xs"
+            >
+              <option value="">-- Sin proveedor asignado --</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Precios */}
@@ -1055,6 +1140,14 @@ export function ProductsView({ initialProducts, suppliers }: ProductsViewProps) 
           </form>
         )}
       </Modal>
+
+      {/* Modal de Gestión de Categorías y Subcategorías */}
+      <CategoriesModal
+        isOpen={isCategoriesModalOpen}
+        onClose={() => setIsCategoriesModalOpen(false)}
+        categories={categories}
+        onCategoriesChange={setCategories}
+      />
     </div>
   );
 }

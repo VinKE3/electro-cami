@@ -5,7 +5,11 @@ import { products, suppliers, cashMovements } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-export async function getProducts(options?: { publishedOnly?: boolean; category?: string }) {
+export async function getProducts(options?: {
+  publishedOnly?: boolean;
+  category?: string;
+  subcategory?: string;
+}) {
   try {
     const list = await db.query.products.findMany({
       where: (p, { eq, and }) => {
@@ -15,6 +19,9 @@ export async function getProducts(options?: { publishedOnly?: boolean; category?
         }
         if (options?.category && options.category !== "todas") {
           conditions.push(eq(p.category, options.category));
+        }
+        if (options?.subcategory && options.subcategory !== "todas") {
+          conditions.push(eq(p.subcategory, options.subcategory));
         }
         return conditions.length > 0 ? and(...conditions) : undefined;
       },
@@ -35,6 +42,7 @@ export async function createProduct(formData: {
   name: string;
   description?: string;
   category: string;
+  subcategory?: string;
   costPrice: number;
   cashPrice: number;
   installmentPrice?: number;
@@ -58,6 +66,7 @@ export async function createProduct(formData: {
         name: formData.name.trim(),
         description: formData.description?.trim() || null,
         category: formData.category.trim() || "Varios",
+        subcategory: formData.subcategory?.trim() || null,
         costPrice: formData.costPrice.toString(),
         cashPrice: formData.cashPrice.toString(),
         installmentPrice: formData.installmentPrice ? formData.installmentPrice.toString() : null,
@@ -104,6 +113,7 @@ export async function updateProduct(
     name: string;
     description?: string;
     category: string;
+    subcategory?: string;
     costPrice: number;
     cashPrice: number;
     installmentPrice?: number;
@@ -130,6 +140,7 @@ export async function updateProduct(
         name: formData.name.trim(),
         description: formData.description?.trim() || null,
         category: formData.category.trim() || "Varios",
+        subcategory: formData.subcategory?.trim() || null,
         costPrice: formData.costPrice.toString(),
         cashPrice: formData.cashPrice.toString(),
         installmentPrice: formData.installmentPrice ? formData.installmentPrice.toString() : null,

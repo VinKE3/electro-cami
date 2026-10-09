@@ -35,12 +35,22 @@ export const suppliers = pgTable("suppliers", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// 2.5. CATEGORÍAS Y SUBCATEGORÍAS
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  parentId: integer("parent_id").references((): any => categories.id, { onDelete: "cascade" }),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // 3. PRODUCTOS (Inventario y Catálogo)
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   category: varchar("category", { length: 100 }).notNull().default("Varios"),
+  subcategory: varchar("subcategory", { length: 100 }),
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }).notNull().default("0"), // Costo de compra
   cashPrice: numeric("cash_price", { precision: 12, scale: 2 }).notNull().default("0"), // Precio de contado
   installmentPrice: numeric("installment_price", { precision: 12, scale: 2 }), // Precio sugerido en cuotas

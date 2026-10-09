@@ -18,35 +18,48 @@ import { Pagination } from "./ui/pagination";
 interface PublicCatalogProps {
   products: any[];
   businessPhone?: string;
+  initialCategories?: any[];
 }
 
 export function PublicCatalog({
   products,
   businessPhone = "5491100000000",
+  initialCategories = [],
 }: PublicCatalogProps) {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("todas");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("todas");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
 
-  const categories = [
+  const categoryNames = [
     "todas",
-    "Colchones",
-    "Celulares & Tecnología",
-    "Electrodomésticos",
-    "Muebles & Hogar",
-    "Varios",
+    ...Array.from(
+      new Set([
+        ...(initialCategories?.map((c: any) => c.name) || []),
+        ...products.map((p) => p.category).filter(Boolean),
+      ])
+    ),
   ];
+
+  const activeCategoryObj = initialCategories.find(
+    (c: any) => c.name === selectedCategory
+  );
+  const subcategoriesForActive = activeCategoryObj?.subcategories || [];
 
   const filtered = products.filter((p) => {
     if (!p.isPublished) return false;
     const matchesCat =
       selectedCategory === "todas" ? true : p.category === selectedCategory;
+    const matchesSub =
+      selectedSubcategory === "todas"
+        ? true
+        : p.subcategory === selectedSubcategory;
     const matchesSearch =
       !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       (p.description && p.description.toLowerCase().includes(search.toLowerCase()));
-    return matchesCat && matchesSearch;
+    return matchesCat && matchesSub && matchesSearch;
   });
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -145,11 +158,12 @@ export function PublicCatalog({
 
           {/* Categorías */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {categories.map((cat) => (
+            {categoryNames.map((cat) => (
               <button
                 key={cat}
                 onClick={() => {
                   setSelectedCategory(cat);
+                  setSelectedSubcategory("todas");
                   setCurrentPage(1);
                 }}
                 className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition capitalize cursor-pointer ${
@@ -162,6 +176,42 @@ export function PublicCatalog({
               </button>
             ))}
           </div>
+
+          {/* Subcategorías (si la categoría seleccionada tiene tipos) */}
+          {selectedCategory !== "todas" && subcategoriesForActive.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1 scrollbar-none border-t border-[#E5E7EB] dark:border-[#334155]">
+              <span className="text-[11px] font-bold text-slate-400 shrink-0">Tipo:</span>
+              <button
+                onClick={() => {
+                  setSelectedSubcategory("todas");
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer shrink-0 ${
+                  selectedSubcategory === "todas"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                Todos
+              </button>
+              {subcategoriesForActive.map((sub: any) => (
+                <button
+                  key={sub.id}
+                  onClick={() => {
+                    setSelectedSubcategory(sub.name);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer shrink-0 ${
+                    selectedSubcategory === sub.name
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {sub.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -255,6 +305,9 @@ export function PublicCatalog({
                     <div className="p-4 space-y-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                         {prod.category}
+                        {prod.subcategory ? (
+                          <span className="text-slate-400 dark:text-slate-500 font-semibold"> • {prod.subcategory}</span>
+                        ) : null}
                       </span>
                       <h3 className="font-bold text-[#1E293B] dark:text-[#F8FAFC] text-base leading-snug">
                         {prod.name}
