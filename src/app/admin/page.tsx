@@ -15,8 +15,10 @@ export default async function AdminDashboardPage() {
   const overview = overviewRes.success && overviewRes.data ? overviewRes.data : {
     activeCreditsCount: 0,
     totalInTheStreet: 0,
+    totalInTheStreetUsd: 0,
     cashInHand: 0,
     mercadoPagoBalance: 0,
+    dolaresEfectivoTotal: 0,
     overdue: [],
     dueToday: [],
     upcomingThisWeek: [],

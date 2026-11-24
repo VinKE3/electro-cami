@@ -9,7 +9,7 @@ import {
   customers,
   products,
 } from "@/db/schema";
-import { eq, desc, and, lte, gte, sql } from "drizzle-orm";
+import { eq, desc, asc, and, lte, gte, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getArgentinaTodayStr, getArgentinaDateOffsetStr } from "@/lib/utils";
 import { requireSession } from "@/lib/auth";
@@ -64,11 +64,13 @@ export async function createCredit(formData: {
 
     if (count <= 0) throw new Error("La cantidad de cuotas debe ser al menos 1.");
 
-    // Cálculo: Precio con interés
+    // Cálculo: Precio con interés y ajuste exacto en última cuota
     const interestMultiplier = 1 + interest / 100;
     const totalFinanced = Math.round(base * interestMultiplier);
     const remainingToFinance = Math.max(0, totalFinanced - downPayment);
-    const installmentAmount = Math.round(remainingToFinance / count);
+    const baseInstallmentAmount = Math.floor(remainingToFinance / count);
+    const lastInstallmentAmount =
+      remainingToFinance - baseInstallmentAmount * (count - 1);
 
     // 1. Insertar el crédito
     const [newCredit] = await db
@@ -86,7 +88,7 @@ export async function createCredit(formData: {
         downPayment: downPayment.toString(),
         remainingAmount: remainingToFinance.toString(),
         installmentCount: count,
-        installmentAmount: installmentAmount.toString(),
+        installmentAmount: baseInstallmentAmount.toString(),
         frequency: formData.frequency,
         frequencyDays: formData.frequencyDays || 7,
         startDate: formData.startDate,
@@ -95,7 +97,7 @@ export async function createCredit(formData: {
       })
       .returning();
 
-    // 2. Generar las cuotas individuales
+    // 2. Generar las cuotas individuales (la última absorbe la diferencia de redondeo)
     const installmentsToInsert = [];
     for (let i = 0; i < count; i++) {
       const dueDate = calculateDueDate(
@@ -104,11 +106,13 @@ export async function createCredit(formData: {
         formData.frequency,
         formData.frequencyDays || 7
       );
+      const amountForThisInstallment =
+        i === count - 1 ? lastInstallmentAmount : baseInstallmentAmount;
 
       installmentsToInsert.push({
         creditId: newCredit.id,
         installmentNumber: i + 1,
-        amount: installmentAmount.toString(),
+        amount: amountForThisInstallment.toString(),
         paidAmount: "0",
         dueDate: dueDate,
         status: "pendiente",
@@ -408,10 +412,13 @@ export async function getDashboardOverview() {
       },
     });
 
-    const totalInTheStreet = allCredits.reduce(
-      (acc, c) => acc + parseFloat(c.remainingAmount || "0"),
-      0
-    );
+    const totalInTheStreetArs = allCredits
+      .filter((c) => (c.currency || "ARS") !== "USD")
+      .reduce((acc, c) => acc + parseFloat(c.remainingAmount || "0"), 0);
+
+    const totalInTheStreetUsd = allCredits
+      .filter((c) => c.currency === "USD")
+      .reduce((acc, c) => acc + parseFloat(c.remainingAmount || "0"), 0);
 
     // 2. Cuotas pendientes y vencidas de créditos activos
     const allPendingInstallments = await db.query.installments.findMany({
@@ -463,7 +470,8 @@ export async function getDashboardOverview() {
       success: true,
       data: {
         activeCreditsCount: allCredits.length,
-        totalInTheStreet,
+        totalInTheStreet: totalInTheStreetArs,
+        totalInTheStreetUsd,
         cashInHand: Math.max(0, cashInHand),
         mercadoPagoBalance: Math.max(0, mercadoPagoBalance),
         dolaresEfectivoTotal: Math.max(0, dolaresEfectivoTotal),
@@ -474,6 +482,220 @@ export async function getDashboardOverview() {
     };
   } catch (error: any) {
     console.error("Error in getDashboardOverview:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function revertPayment(paymentId: number) {
+  try {
+    await requireSession();
+
+    const targetPayment = await db.query.payments.findFirst({
+      where: eq(payments.id, paymentId),
+      with: {
+        credit: {
+          with: {
+            installments: {
+              orderBy: [asc(installments.installmentNumber)],
+            },
+          },
+        },
+      },
+    });
+
+    if (!targetPayment || !targetPayment.credit) {
+      return { success: false, error: "Pago no encontrado." };
+    }
+
+    const credit = targetPayment.credit;
+    if (credit.status === "cancelado") {
+      return {
+        success: false,
+        error: "No se puede anular un pago de un crédito cancelado.",
+      };
+    }
+
+    const linkedMovements = await db
+      .select()
+      .from(cashMovements)
+      .where(eq(cashMovements.paymentId, paymentId));
+
+    const isDownPayment =
+      targetPayment.notes === "Entrega inicial / Seña" ||
+      linkedMovements.some((m) => m.category === "entrega_inicial");
+
+    if (isDownPayment) {
+      return {
+        success: false,
+        error:
+          "La entrega inicial no se puede anular por separado. Si hubo un error, cancelá el crédito completo.",
+      };
+    }
+
+    // 1. Eliminar movimiento de caja asociado y el pago
+    await db.delete(cashMovements).where(eq(cashMovements.paymentId, paymentId));
+    await db.delete(payments).where(eq(payments.id, paymentId));
+
+    // 2. Recalcular cuotas y saldo restante de forma determinística con los pagos restantes
+    const remainingPayments = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.creditId, credit.id))
+      .orderBy(asc(payments.paymentDate), asc(payments.id));
+
+    const remainingPaymentIds = remainingPayments.map((p) => p.id);
+    const downPaymentIds = new Set<number>();
+
+    if (remainingPaymentIds.length > 0) {
+      const remainingCashMovs = await db
+        .select()
+        .from(cashMovements)
+        .where(inArray(cashMovements.paymentId, remainingPaymentIds));
+
+      for (const m of remainingCashMovs) {
+        if (m.paymentId && m.category === "entrega_inicial") {
+          downPaymentIds.add(m.paymentId);
+        }
+      }
+    }
+
+    const remainingNonDownPayments = remainingPayments.filter(
+      (p) => p.notes !== "Entrega inicial / Seña" && !downPaymentIds.has(p.id)
+    );
+
+    const paidMap = new Map<number, number>();
+    for (const inst of credit.installments) {
+      paidMap.set(inst.id, 0);
+    }
+
+    for (const p of remainingNonDownPayments) {
+      const amt = parseFloat(p.amount || "0");
+      if (amt <= 0) continue;
+
+      if (p.installmentId && paidMap.has(p.installmentId)) {
+        paidMap.set(p.installmentId, (paidMap.get(p.installmentId) ?? 0) + amt);
+      } else {
+        let remainingToApply = amt;
+        for (const inst of credit.installments) {
+          if (remainingToApply <= 0) break;
+          const instAmount = parseFloat(inst.amount || "0");
+          const currentPaid = paidMap.get(inst.id) ?? 0;
+          const instDue = instAmount - currentPaid;
+          if (instDue > 0) {
+            const applied = Math.min(remainingToApply, instDue);
+            paidMap.set(inst.id, currentPaid + applied);
+            remainingToApply -= applied;
+          }
+        }
+      }
+    }
+
+    for (const inst of credit.installments) {
+      const paid = paidMap.get(inst.id) ?? 0;
+      const instAmount = parseFloat(inst.amount || "0");
+      const newStatus =
+        paid >= instAmount ? "pagada" : paid > 0 ? "parcial" : "pendiente";
+
+      await db
+        .update(installments)
+        .set({
+          paidAmount: paid.toString(),
+          status: newStatus,
+          paidAt: newStatus === "pagada" ? (inst.paidAt ?? new Date()) : null,
+        })
+        .where(eq(installments.id, inst.id));
+    }
+
+    const totalInstallmentPayments = remainingNonDownPayments.reduce(
+      (acc, p) => acc + parseFloat(p.amount || "0"),
+      0
+    );
+    const financedAmount = Math.max(
+      0,
+      parseFloat(credit.totalAmount || "0") - parseFloat(credit.downPayment || "0")
+    );
+    const newRemaining = Math.max(0, financedAmount - totalInstallmentPayments);
+
+    await db
+      .update(credits)
+      .set({
+        remainingAmount: newRemaining.toString(),
+        status: newRemaining <= 0 ? "finalizado" : "activo",
+      })
+      .where(eq(credits.id, credit.id));
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/creditos");
+    revalidatePath("/admin/caja");
+    revalidatePath("/admin/clientes");
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error reverting payment:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function cancelCredit(
+  creditId: number,
+  options?: { restoreStock?: boolean; revertCash?: boolean }
+) {
+  try {
+    await requireSession();
+
+    const [credit] = await db
+      .select()
+      .from(credits)
+      .where(eq(credits.id, creditId));
+
+    if (!credit) {
+      return { success: false, error: "Crédito no encontrado." };
+    }
+    if (credit.status === "cancelado") {
+      return { success: false, error: "El crédito ya está cancelado." };
+    }
+
+    await db
+      .update(credits)
+      .set({
+        status: "cancelado",
+        remainingAmount: "0",
+      })
+      .where(eq(credits.id, creditId));
+
+    if (options?.revertCash !== false) {
+      await db.delete(cashMovements).where(eq(cashMovements.creditId, creditId));
+    }
+
+    if (options?.restoreStock !== false && credit.productId) {
+      const [product] = await db
+        .select()
+        .from(products)
+        .where(eq(products.id, credit.productId));
+
+      if (product) {
+        const newStock = (product.stock ?? 0) + 1;
+        await db
+          .update(products)
+          .set({
+            stock: newStock,
+            status: "disponible",
+          })
+          .where(eq(products.id, credit.productId));
+      }
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/creditos");
+    revalidatePath("/admin/caja");
+    revalidatePath("/admin/clientes");
+    revalidatePath("/admin/productos");
+    revalidatePath("/catalogo");
+    revalidatePath("/");
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error cancelling credit:", error);
     return { success: false, error: error.message };
   }
 }

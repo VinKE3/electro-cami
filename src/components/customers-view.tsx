@@ -91,7 +91,10 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
           notes,
         });
         if (res.success && res.data) {
-          setCustomers([{ ...res.data, activeCreditsCount: 0, totalDebt: 0 }, ...customers]);
+          setCustomers([
+            { ...res.data, activeCreditsCount: 0, totalDebt: 0, totalDebtArs: 0, totalDebtUsd: 0 },
+            ...customers,
+          ]);
           setIsModalOpen(false);
         } else {
           alert(res.error || "Error al crear");
@@ -198,7 +201,12 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
             <p className="text-xs">Agrega a tus compradores para llevar un mejor control.</p>
           </div>
         ) : (
-          paginated.map((c) => (
+          paginated.map((c) => {
+            const debtArs = c.totalDebtArs ?? c.totalDebt ?? 0;
+            const debtUsd = c.totalDebtUsd ?? 0;
+            const hasDebt = debtArs > 0 || debtUsd > 0;
+
+            return (
             <div
               key={c.id}
               className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between gap-4 hover:border-blue-400/40 transition"
@@ -227,12 +235,12 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
 
                       <span
                         className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full inline-block ${
-                          c.totalDebt > 0
+                          hasDebt
                             ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                             : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
                         }`}
                       >
-                        {c.totalDebt > 0 ? "Con crédito activo" : "Sin deuda"}
+                        {hasDebt ? "Con crédito activo" : "Sin deuda"}
                       </span>
                     </div>
                   </div>
@@ -300,13 +308,28 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
                   <span className="text-[10px] uppercase font-bold text-[#64748B] dark:text-[#94A3B8] block">
                     Saldo Pendiente
                   </span>
-                  <span
-                    className={`text-sm font-black ${
-                      c.totalDebt > 0 ? "text-[#1E293B] dark:text-[#F8FAFC]" : "text-blue-600 dark:text-blue-400"
-                    }`}
-                  >
-                    {formatCurrency(c.totalDebt)}
-                  </span>
+                  {debtArs > 0 && debtUsd > 0 ? (
+                    <div className="space-y-0.5">
+                      <span className="text-sm font-black text-[#1E293B] dark:text-[#F8FAFC] block">
+                        {formatCurrency(debtArs, "ARS")}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
+                        + {formatCurrency(debtUsd, "USD")}
+                      </span>
+                    </div>
+                  ) : debtUsd > 0 ? (
+                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(debtUsd, "USD")}
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-sm font-black ${
+                        debtArs > 0 ? "text-[#1E293B] dark:text-[#F8FAFC]" : "text-blue-600 dark:text-blue-400"
+                      }`}
+                    >
+                      {formatCurrency(debtArs, "ARS")}
+                    </span>
+                  )}
                 </div>
 
                 <div className="text-right">
@@ -317,7 +340,8 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

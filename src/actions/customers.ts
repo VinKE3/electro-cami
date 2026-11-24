@@ -27,10 +27,12 @@ export async function getCustomers() {
 
         const activeCredits = clientCredits.filter((cr) => cr.status === "activo");
         const completedCredits = clientCredits.filter((cr) => cr.status === "finalizado");
-        const totalDebt = activeCredits.reduce(
-          (acc, cr) => acc + parseFloat(cr.remainingAmount || "0"),
-          0
-        );
+        const totalDebtArs = activeCredits
+          .filter((cr) => (cr.currency || "ARS") !== "USD")
+          .reduce((acc, cr) => acc + parseFloat(cr.remainingAmount || "0"), 0);
+        const totalDebtUsd = activeCredits
+          .filter((cr) => cr.currency === "USD")
+          .reduce((acc, cr) => acc + parseFloat(cr.remainingAmount || "0"), 0);
 
         let overdueCount = 0;
         let paidCount = 0;
@@ -69,7 +71,9 @@ export async function getCustomers() {
           ...c,
           activeCreditsCount: activeCredits.length,
           completedCreditsCount: completedCredits.length,
-          totalDebt,
+          totalDebt: totalDebtArs,
+          totalDebtArs,
+          totalDebtUsd,
           overdueCount,
           paidCount,
           score,

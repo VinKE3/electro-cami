@@ -24,6 +24,7 @@ interface DashboardViewProps {
   overview: {
     activeCreditsCount: number;
     totalInTheStreet: number;
+    totalInTheStreetUsd?: number;
     cashInHand: number;
     mercadoPagoBalance: number;
     dolaresEfectivoTotal?: number;
@@ -175,8 +176,13 @@ export function DashboardView({
             </div>
           </div>
           <div className="text-xl sm:text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC]">
-            {formatCurrency(overview.totalInTheStreet)}
+            {formatCurrency(overview.totalInTheStreet, "ARS")}
           </div>
+          {overview.totalInTheStreetUsd && overview.totalInTheStreetUsd > 0 ? (
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md w-fit">
+              💵 + {formatCurrency(overview.totalInTheStreetUsd, "USD")} en cuotas USD
+            </div>
+          ) : null}
           <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
             {overview.activeCreditsCount} créditos activos por cobrar
           </p>

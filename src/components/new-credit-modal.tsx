@@ -16,6 +16,8 @@ interface CustomerOption {
   scoreLabel?: string;
   overdueCount?: number;
   totalDebt?: number;
+  totalDebtArs?: number;
+  totalDebtUsd?: number;
 }
 
 interface ProductOption {
@@ -128,7 +130,9 @@ export function NewCreditModal({
 
     const totalFinanced = Math.round(base * (1 + interest / 100));
     const remainingToFinance = Math.max(0, totalFinanced - initial);
-    const installmentValue = Math.round(remainingToFinance / count);
+    const installmentValue = Math.floor(remainingToFinance / count);
+    const lastInstallmentValue =
+      remainingToFinance - installmentValue * (count - 1);
     const totalRevenue = totalFinanced;
     const totalProfit = totalRevenue - cost;
 
@@ -136,6 +140,7 @@ export function NewCreditModal({
       totalFinanced,
       remainingToFinance,
       installmentValue,
+      lastInstallmentValue,
       totalProfit,
     };
   }, [baseAmount, interestRate, downPayment, installmentCount, costAmount]);

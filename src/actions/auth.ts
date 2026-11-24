@@ -179,3 +179,102 @@ export async function deleteUser(id: number) {
     return { success: false, error: error.message };
   }
 }
+
+export async function updateUserPassword(data: {
+  userId: number;
+  newPassword: string;
+  currentPassword?: string;
+}) {
+  try {
+    const session = await requireSession();
+
+    if (session.role !== "admin" && session.userId !== data.userId) {
+      return {
+        success: false,
+        error: "No tienes permiso para cambiar la contraseña de otro usuario.",
+      };
+    }
+
+    const newPwd = data.newPassword.trim();
+    if (newPwd.length < 4) {
+      return {
+        success: false,
+        error: "La nueva contraseña debe tener al menos 4 caracteres.",
+      };
+    }
+
+    const [targetUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, data.userId))
+      .limit(1);
+
+    if (!targetUser) {
+      return { success: false, error: "Usuario no encontrado." };
+    }
+
+    if (session.role !== "admin") {
+      if (!data.currentPassword || !data.currentPassword.trim()) {
+        return {
+          success: false,
+          error: "Debes ingresar tu contraseña actual.",
+        };
+      }
+      const isValidCurrent = await verifyPassword(
+        data.currentPassword.trim(),
+        targetUser.passwordHash
+      );
+      if (!isValidCurrent) {
+        return {
+          success: false,
+          error: "La contraseña actual es incorrecta.",
+        };
+      }
+    }
+
+    const passwordHash = await hashPassword(newPwd);
+    await db
+      .update(users)
+      .set({ passwordHash })
+      .where(eq(users.id, data.userId));
+
+    revalidatePath("/admin/usuarios");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function toggleUserActive(userId: number) {
+  try {
+    const session = await requireSession({ adminOnly: true });
+
+    if (session.userId === userId) {
+      return {
+        success: false,
+        error: "No puedes desactivar tu propia cuenta activa.",
+      };
+    }
+
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!existing) {
+      return { success: false, error: "Usuario no encontrado." };
+    }
+
+    const nextActive = !existing.isActive;
+    await db
+      .update(users)
+      .set({ isActive: nextActive })
+      .where(eq(users.id, userId));
+
+    revalidatePath("/admin/usuarios");
+    return { success: true, data: { isActive: nextActive } };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

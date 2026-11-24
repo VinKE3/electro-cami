@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   formatCurrency,
   formatDate,
@@ -11,7 +12,9 @@ import {
 import { PaymentModal } from "./payment-modal";
 import { WhatsAppModal } from "./whatsapp-modal";
 import { NewCreditModal } from "./new-credit-modal";
+import { Modal } from "./ui/modal";
 import { Pagination } from "./ui/pagination";
+import { revertPayment, cancelCredit } from "@/actions/credits";
 import {
   CreditCard,
   Plus,
@@ -22,6 +25,8 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
+  Ban,
 } from "lucide-react";
 
 interface CreditsViewProps {
@@ -35,12 +40,18 @@ export function CreditsView({
   customers,
   products,
 }: CreditsViewProps) {
+  const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<string>("activo");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [expandedCreditId, setExpandedCreditId] = useState<number | null>(null);
   const [isNewCreditOpen, setIsNewCreditOpen] = useState(false);
+  const [busyPaymentId, setBusyPaymentId] = useState<number | null>(null);
+  const [cancelModalCredit, setCancelModalCredit] = useState<any | null>(null);
+  const [restoreStockOnCancel, setRestoreStockOnCancel] = useState(true);
+  const [revertCashOnCancel, setRevertCashOnCancel] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const [paymentModalState, setPaymentModalState] = useState<{
     isOpen: boolean;
@@ -136,6 +147,57 @@ export function CreditsView({
     currentPage * pageSize
   );
 
+  const handleRevertPayment = async (paymentId: number, amount: string, currency: string) => {
+    if (
+      !confirm(
+        `¿Anular este pago de ${formatCurrency(amount, currency)}? Se eliminará el ingreso de caja y se reabrirá la cuota correspondiente.`
+      )
+    ) {
+      return;
+    }
+
+    setBusyPaymentId(paymentId);
+    try {
+      const res = await revertPayment(paymentId);
+      if (res.success) {
+        router.refresh();
+      } else {
+        alert(res.error || "No se pudo anular el pago.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setBusyPaymentId(null);
+    }
+  };
+
+  const openCancelCreditModal = (cred: any) => {
+    setCancelModalCredit(cred);
+    setRestoreStockOnCancel(Boolean(cred.productId));
+    setRevertCashOnCancel(Boolean(cred.payments && cred.payments.length > 0));
+  };
+
+  const handleConfirmCancelCredit = async () => {
+    if (!cancelModalCredit) return;
+    setIsCancelling(true);
+    try {
+      const res = await cancelCredit(cancelModalCredit.id, {
+        restoreStock: restoreStockOnCancel,
+        revertCash: revertCashOnCancel,
+      });
+      if (res.success) {
+        setCancelModalCredit(null);
+        router.refresh();
+      } else {
+        alert(res.error || "No se pudo cancelar el crédito.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const openPaymentModal = (cred: any, inst?: any) => {
     const cust = cred.customer;
     let suggested = parseFloat(cred.installmentAmount || "0");
@@ -205,6 +267,7 @@ export function CreditsView({
           {[
             { id: "activo", label: "Activos" },
             { id: "finalizado", label: "Finalizados" },
+            { id: "cancelado", label: "Cancelados" },
             { id: "todos", label: "Todos" },
           ].map((tab) => (
             <button
@@ -290,7 +353,9 @@ export function CreditsView({
                         className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
                           cred.status === "activo"
                             ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
-                            : "bg-slate-100 text-slate-600 dark:bg-[#0F172A] dark:text-slate-400"
+                            : cred.status === "cancelado"
+                              ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                              : "bg-slate-100 text-slate-600 dark:bg-[#0F172A] dark:text-slate-400"
                         }`}
                       >
                         {cred.status}
@@ -438,7 +503,7 @@ export function CreditsView({
                               <span className="font-black text-[#1E293B] dark:text-[#F8FAFC]">
                                 {formatCurrency(inst.amount, cred.currency || "ARS")}
                               </span>
-                              {!isPaid && (
+                              {!isPaid && cred.status === "activo" && (
                                 <div className="flex items-center gap-1.5">
                                   {cust.phone && (
                                     <button
@@ -471,24 +536,65 @@ export function CreditsView({
                           Historial de Pagos Realizados
                         </span>
                         <div className="space-y-1.5">
-                          {cred.payments.map((p: any) => (
-                            <div
-                              key={p.id}
-                              className="text-xs bg-white dark:bg-[#1E293B] p-2.5 rounded-lg border border-[#E5E7EB] dark:border-[#334155] flex justify-between items-center text-[#1E293B] dark:text-[#F8FAFC]"
-                            >
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
-                                <span>
-                                  Abonó {formatCurrency(p.amount, p.currency || cred.currency || "ARS")} vía{" "}
-                                  <strong className="capitalize">{p.paymentMethod}</strong>
-                                </span>
+                          {cred.payments.map((p: any) => {
+                            const isDownPayment = p.notes === "Entrega inicial / Seña";
+                            const canRevert = cred.status !== "cancelado" && !isDownPayment;
+                            const paymentCurr = p.currency || cred.currency || "ARS";
+
+                            return (
+                              <div
+                                key={p.id}
+                                className="text-xs bg-white dark:bg-[#1E293B] p-2.5 rounded-lg border border-[#E5E7EB] dark:border-[#334155] flex justify-between items-center gap-2 text-[#1E293B] dark:text-[#F8FAFC]"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                  <span className="truncate">
+                                    Abonó {formatCurrency(p.amount, paymentCurr)} vía{" "}
+                                    <strong className="capitalize">{p.paymentMethod}</strong>
+                                    {isDownPayment && (
+                                      <span className="ml-1.5 text-[10px] text-[#64748B] dark:text-[#94A3B8]">
+                                        (Seña)
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[#64748B] dark:text-[#94A3B8] text-[10px]">
+                                    {formatDate(p.paymentDate)}
+                                  </span>
+                                  {canRevert && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleRevertPayment(p.id, p.amount, paymentCurr)
+                                      }
+                                      disabled={busyPaymentId === p.id}
+                                      title="Anular pago equivocado"
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 disabled:opacity-50 transition cursor-pointer"
+                                    >
+                                      <RotateCcw className="w-3 h-3" />
+                                      {busyPaymentId === p.id ? "Anulando..." : "Anular"}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <span className="text-[#64748B] dark:text-[#94A3B8] text-[10px]">
-                                {formatDate(p.paymentDate)}
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Acciones de administración del crédito */}
+                    {cred.status !== "cancelado" && (
+                      <div className="pt-2 border-t border-[#E5E7EB] dark:border-[#334155] flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openCancelCreditModal(cred)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition cursor-pointer"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          Cancelar crédito
+                        </button>
                       </div>
                     )}
                   </div>
@@ -548,6 +654,72 @@ export function CreditsView({
         remainingAmount={whatsAppModalState.remainingAmount}
         defaultType={whatsAppModalState.defaultType}
       />
+
+      {/* MODAL CONFIRMAR CANCELACIÓN DE CRÉDITO */}
+      <Modal
+        isOpen={Boolean(cancelModalCredit)}
+        onClose={() => !isCancelling && setCancelModalCredit(null)}
+        title="Cancelar Crédito"
+        description={
+          cancelModalCredit
+            ? `Estás por cancelar el crédito "${cancelModalCredit.concept}" de ${cancelModalCredit.customer.name} ${cancelModalCredit.customer.lastName || ""}.`
+            : undefined
+        }
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
+            El crédito pasará a estado <strong>cancelado</strong> y su saldo pendiente quedará en 0.
+          </p>
+
+          {cancelModalCredit?.productId && (
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-[#F4F6F9] dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={restoreStockOnCancel}
+                onChange={(e) => setRestoreStockOnCancel(e.target.checked)}
+                className="mt-0.5 rounded border-[#CBD5E1]"
+              />
+              <span className="text-xs text-[#1E293B] dark:text-[#F8FAFC]">
+                <strong>Devolver 1 unidad al stock</strong> del producto asociado
+              </span>
+            </label>
+          )}
+
+          {cancelModalCredit?.payments && cancelModalCredit.payments.length > 0 && (
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-[#F4F6F9] dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#334155] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={revertCashOnCancel}
+                onChange={(e) => setRevertCashOnCancel(e.target.checked)}
+                className="mt-0.5 rounded border-[#CBD5E1]"
+              />
+              <span className="text-xs text-[#1E293B] dark:text-[#F8FAFC]">
+                <strong>Revertir ingresos de caja</strong> asociados a este crédito (seña y cuotas)
+              </span>
+            </label>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              disabled={isCancelling}
+              onClick={() => setCancelModalCredit(null)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-[#64748B] hover:bg-[#F4F6F9] dark:text-[#94A3B8] dark:hover:bg-[#0F172A] transition cursor-pointer"
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              disabled={isCancelling}
+              onClick={handleConfirmCancelCredit}
+              className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 disabled:opacity-50 transition cursor-pointer"
+            >
+              {isCancelling ? "Cancelando..." : "Confirmar Cancelación"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
