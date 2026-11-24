@@ -81,39 +81,43 @@ export async function createProduct(formData: {
     const computedStatus =
       formData.status || (stockVal > 0 ? "disponible" : "agotado");
 
-    const [newProduct] = await db
-      .insert(products)
-      .values({
-        name: formData.name.trim(),
-        description: formData.description?.trim() || null,
-        category: formData.category.trim() || "Varios",
-        subcategory: formData.subcategory?.trim() || null,
-        costPrice: formData.costPrice.toString(),
-        cashPrice: formData.cashPrice.toString(),
-        installmentPrice: formData.installmentPrice ? formData.installmentPrice.toString() : null,
-        stock: stockVal,
-        currency: formData.currency || "ARS",
-        imageUrl: formData.imageUrl?.trim() || null,
-        status: computedStatus,
-        isPublished: formData.isPublished ?? true,
-        supplierId: formData.supplierId || null,
-      })
-      .returning();
+    const newProduct = await db.transaction(async (tx) => {
+      const [createdProduct] = await tx
+        .insert(products)
+        .values({
+          name: formData.name.trim(),
+          description: formData.description?.trim() || null,
+          category: formData.category.trim() || "Varios",
+          subcategory: formData.subcategory?.trim() || null,
+          costPrice: formData.costPrice.toString(),
+          cashPrice: formData.cashPrice.toString(),
+          installmentPrice: formData.installmentPrice ? formData.installmentPrice.toString() : null,
+          stock: stockVal,
+          currency: formData.currency || "ARS",
+          imageUrl: formData.imageUrl?.trim() || null,
+          status: computedStatus,
+          isPublished: formData.isPublished ?? true,
+          supplierId: formData.supplierId || null,
+        })
+        .returning();
 
-    // Si se indicó descontar el costo de la caja de hoy:
-    if (formData.deductFromCash && formData.costPrice > 0 && stockVal > 0) {
-      const totalAmount = Math.round(Number(formData.costPrice) * stockVal);
-      await db.insert(cashMovements).values({
-        type: "egreso",
-        category: "compra_mercaderia",
-        amount: totalAmount.toString(),
-        currency: formData.currency || "ARS",
-        paymentMethod: formData.paymentMethod || "efectivo",
-        productId: newProduct.id,
-        units: stockVal,
-        description: `Compra inicial de stock: ${stockVal} u. de ${newProduct.name}`,
-      });
-    }
+      // Si se indicó descontar el costo de la caja de hoy:
+      if (formData.deductFromCash && formData.costPrice > 0 && stockVal > 0) {
+        const totalAmount = Math.round(Number(formData.costPrice) * stockVal);
+        await tx.insert(cashMovements).values({
+          type: "egreso",
+          category: "compra_mercaderia",
+          amount: totalAmount.toString(),
+          currency: formData.currency || "ARS",
+          paymentMethod: formData.paymentMethod || "efectivo",
+          productId: createdProduct.id,
+          units: stockVal,
+          description: `Compra inicial de stock: ${stockVal} u. de ${createdProduct.name}`,
+        });
+      }
+
+      return createdProduct;
+    });
 
     revalidatePath("/admin/productos");
     revalidatePath("/admin/caja");

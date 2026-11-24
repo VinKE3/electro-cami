@@ -15,72 +15,99 @@ export async function getCustomers() {
       .from(customers)
       .orderBy(desc(customers.createdAt));
 
+    if (list.length === 0) {
+      return { success: true, data: [] };
+    }
+
     const todayStr = getArgentinaTodayStr();
+    const customerIds = list.map((c) => c.id);
 
-    // Calculamos resumen de créditos y semáforo de confianza para cada cliente
-    const customersWithStats = await Promise.all(
-      list.map(async (c) => {
-        const clientCredits = await db
-          .select()
-          .from(credits)
-          .where(eq(credits.customerId, c.id));
+    // Consultas en bloque para evitar N+1
+    const allCredits = await db
+      .select()
+      .from(credits)
+      .where(inArray(credits.customerId, customerIds));
 
-        const activeCredits = clientCredits.filter((cr) => cr.status === "activo");
-        const completedCredits = clientCredits.filter((cr) => cr.status === "finalizado");
-        const totalDebtArs = activeCredits
-          .filter((cr) => (cr.currency || "ARS") !== "USD")
-          .reduce((acc, cr) => acc + parseFloat(cr.remainingAmount || "0"), 0);
-        const totalDebtUsd = activeCredits
-          .filter((cr) => cr.currency === "USD")
-          .reduce((acc, cr) => acc + parseFloat(cr.remainingAmount || "0"), 0);
-
-        let overdueCount = 0;
-        let paidCount = 0;
-        const creditIds = clientCredits.map((cr) => cr.id);
-
-        if (creditIds.length > 0) {
-          const clientInstallments = await db
+    const creditIds = allCredits.map((cr) => cr.id);
+    const allInstallments =
+      creditIds.length > 0
+        ? await db
             .select()
             .from(installments)
-            .where(inArray(installments.creditId, creditIds));
+            .where(inArray(installments.creditId, creditIds))
+        : [];
 
-          for (const inst of clientInstallments) {
-            if (inst.status === "pagada") {
-              paidCount++;
-            } else if (inst.status === "vencida" || inst.dueDate < todayStr) {
-              overdueCount++;
-            }
+    const creditsByCustomer = new Map<number, typeof allCredits>();
+    for (const cr of allCredits) {
+      const arr = creditsByCustomer.get(cr.customerId) ?? [];
+      arr.push(cr);
+      creditsByCustomer.set(cr.customerId, arr);
+    }
+
+    const installmentsByCredit = new Map<number, typeof allInstallments>();
+    for (const inst of allInstallments) {
+      const arr = installmentsByCredit.get(inst.creditId) ?? [];
+      arr.push(inst);
+      installmentsByCredit.set(inst.creditId, arr);
+    }
+
+    // Calculamos resumen de créditos y semáforo de confianza en memoria
+    const customersWithStats = list.map((c) => {
+      const clientCredits = creditsByCustomer.get(c.id) ?? [];
+      const activeCredits = clientCredits.filter((cr) => cr.status === "activo");
+      const completedCredits = clientCredits.filter((cr) => cr.status === "finalizado");
+      const totalDebtArs = activeCredits
+        .filter((cr) => (cr.currency || "ARS") !== "USD")
+        .reduce((acc, cr) => acc + parseFloat(cr.remainingAmount || "0"), 0);
+      const totalDebtUsd = activeCredits
+        .filter((cr) => cr.currency === "USD")
+        .reduce((acc, cr) => acc + parseFloat(cr.remainingAmount || "0"), 0);
+
+      let overdueCount = 0;
+      let paidCount = 0;
+
+      for (const cr of clientCredits) {
+        if (cr.status === "cancelado") continue;
+        const crInsts = installmentsByCredit.get(cr.id) ?? [];
+        for (const inst of crInsts) {
+          if (inst.status === "pagada") {
+            paidCount++;
+          } else if (
+            cr.status === "activo" &&
+            (inst.status === "vencida" || inst.dueDate < todayStr)
+          ) {
+            overdueCount++;
           }
         }
+      }
 
-        let score: "confiable" | "moroso" | "regular" = "regular";
-        let scoreLabel = "🟡 Al día / Nuevo";
+      let score: "confiable" | "moroso" | "regular" = "regular";
+      let scoreLabel = "🟡 Al día / Nuevo";
 
-        if (overdueCount > 0) {
-          score = "moroso";
-          scoreLabel = `🔴 Moroso (${overdueCount} ${overdueCount === 1 ? "cuota vencida" : "cuotas vencidas"})`;
-        } else if (completedCredits.length > 0 || paidCount >= 3) {
-          score = "confiable";
-          scoreLabel = "🟢 Confiable (Buen pagador)";
-        } else {
-          score = "regular";
-          scoreLabel = "🟡 Al día / Nuevo";
-        }
+      if (overdueCount > 0) {
+        score = "moroso";
+        scoreLabel = `🔴 Moroso (${overdueCount} ${overdueCount === 1 ? "cuota vencida" : "cuotas vencidas"})`;
+      } else if (completedCredits.length > 0 || paidCount >= 3) {
+        score = "confiable";
+        scoreLabel = "🟢 Confiable (Buen pagador)";
+      } else {
+        score = "regular";
+        scoreLabel = "🟡 Al día / Nuevo";
+      }
 
-        return {
-          ...c,
-          activeCreditsCount: activeCredits.length,
-          completedCreditsCount: completedCredits.length,
-          totalDebt: totalDebtArs,
-          totalDebtArs,
-          totalDebtUsd,
-          overdueCount,
-          paidCount,
-          score,
-          scoreLabel,
-        };
-      })
-    );
+      return {
+        ...c,
+        activeCreditsCount: activeCredits.length,
+        completedCreditsCount: completedCredits.length,
+        totalDebt: totalDebtArs,
+        totalDebtArs,
+        totalDebtUsd,
+        overdueCount,
+        paidCount,
+        score,
+        scoreLabel,
+      };
+    });
 
     return { success: true, data: customersWithStats };
   } catch (error: any) {

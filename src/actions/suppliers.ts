@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { suppliers, products } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 
@@ -14,21 +14,32 @@ export async function getSuppliers() {
       .from(suppliers)
       .orderBy(desc(suppliers.createdAt));
 
-    // Contar productos provistos
-    const suppliersWithCount = await Promise.all(
-      list.map(async (s) => {
-        const prodList = await db
-          .select()
-          .from(products)
-          .where(eq(products.supplierId, s.id));
+    if (list.length === 0) {
+      return { success: true, data: [] };
+    }
 
-        return {
-          ...s,
-          productsCount: prodList.length,
-          products: prodList,
-        };
-      })
-    );
+    const supplierIds = list.map((s) => s.id);
+    const allProducts = await db
+      .select()
+      .from(products)
+      .where(inArray(products.supplierId, supplierIds));
+
+    const productsBySupplier = new Map<number, typeof allProducts>();
+    for (const p of allProducts) {
+      if (p.supplierId == null) continue;
+      const arr = productsBySupplier.get(p.supplierId) ?? [];
+      arr.push(p);
+      productsBySupplier.set(p.supplierId, arr);
+    }
+
+    const suppliersWithCount = list.map((s) => {
+      const prodList = productsBySupplier.get(s.id) ?? [];
+      return {
+        ...s,
+        productsCount: prodList.length,
+        products: prodList,
+      };
+    });
 
     return { success: true, data: suppliersWithCount };
   } catch (error: any) {

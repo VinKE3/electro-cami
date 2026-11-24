@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { categories } from "@/db/schema";
-import { eq, isNull, asc } from "drizzle-orm";
+import { categories, products } from "@/db/schema";
+import { eq, and, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 
@@ -104,11 +104,62 @@ export async function updateCategory(
       return { success: false, error: "El nombre no puede estar vacío." };
     }
 
-    const [updated] = await db
-      .update(categories)
-      .set({ name: trimmedName })
-      .where(eq(categories.id, id))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(categories)
+        .where(eq(categories.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return null;
+      }
+
+      const [saved] = await tx
+        .update(categories)
+        .set({ name: trimmedName })
+        .where(eq(categories.id, id))
+        .returning();
+
+      // Sincronizar productos existentes si cambió el nombre
+      if (existing.name !== trimmedName) {
+        if (existing.parentId === null) {
+          await tx
+            .update(products)
+            .set({ category: trimmedName })
+            .where(eq(products.category, existing.name));
+        } else {
+          const [parent] = await tx
+            .select()
+            .from(categories)
+            .where(eq(categories.id, existing.parentId))
+            .limit(1);
+
+          if (parent) {
+            await tx
+              .update(products)
+              .set({ subcategory: trimmedName })
+              .where(
+                and(
+                  eq(products.category, parent.name),
+                  eq(products.subcategory, existing.name)
+                )
+              );
+          } else {
+            await tx
+              .update(products)
+              .set({ subcategory: trimmedName })
+              .where(eq(products.subcategory, existing.name));
+          }
+        }
+      }
+
+      return saved;
+    });
+
+    if (!updated) {
+      return { success: false, error: "Categoría no encontrada." };
+    }
 
     revalidatePath("/admin/productos");
     revalidatePath("/catalogo");

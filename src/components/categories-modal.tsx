@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "./ui/modal";
 import { CategoryItem, createCategory, updateCategory, deleteCategory } from "@/actions/categories";
 import {
@@ -29,6 +30,7 @@ export function CategoriesModal({
   categories,
   onCategoriesChange,
 }: CategoriesModalProps) {
+  const router = useRouter();
   // Nueva categoría principal
   const [newCatName, setNewCatName] = useState("");
   const [isCreatingCat, setIsCreatingCat] = useState(false);
@@ -147,6 +149,7 @@ export function CategoriesModal({
         onCategoriesChange(updated);
         setEditingId(null);
         setEditingName("");
+        router.refresh();
       } else {
         alert(res.error || "No se pudo actualizar");
       }

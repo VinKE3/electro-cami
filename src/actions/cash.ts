@@ -90,58 +90,62 @@ export async function createCashMovement(formData: {
     const currency = formData.currency || "ARS";
     const units = formData.units ? Number(formData.units) : 1;
 
-    const [newMovement] = await db
-      .insert(cashMovements)
-      .values({
-        type: formData.type,
-        category: formData.category,
-        amount: formData.amount.toString(),
-        currency: currency,
-        paymentMethod: formData.paymentMethod,
-        description: formData.description.trim(),
-        productId: formData.productId || null,
-        units: formData.productId ? units : null,
-      })
-      .returning();
+    const newMovement = await db.transaction(async (tx) => {
+      const [createdMovement] = await tx
+        .insert(cashMovements)
+        .values({
+          type: formData.type,
+          category: formData.category,
+          amount: formData.amount.toString(),
+          currency: currency,
+          paymentMethod: formData.paymentMethod,
+          description: formData.description.trim(),
+          productId: formData.productId || null,
+          units: formData.productId ? units : null,
+        })
+        .returning();
 
-    // Si es compra de mercadería vinculada a un producto:
-    if (
-      formData.type === "egreso" &&
-      formData.category === "compra_mercaderia" &&
-      formData.productId
-    ) {
-      const [product] = await db
-        .select()
-        .from(products)
-        .where(eq(products.id, formData.productId));
-
-      if (product) {
-        const currentStock = product.stock ?? 0;
-        const newStock = currentStock + units;
-        const newStatus = newStock > 0 ? "disponible" : product.status;
-
-        const updateData: any = {
-          stock: newStock,
-          status: newStatus,
-        };
-
-        // Si se indicó actualizar el costo del producto con el nuevo precio de compra unitario:
-        if (formData.updateCostPrice) {
-          const unitCost = Math.round(formData.amount / units);
-          updateData.costPrice = unitCost.toString();
-        }
-
-        // Si se indicó actualizar el precio de venta al público en el mismo paso:
-        if (formData.newCashPrice && formData.newCashPrice > 0) {
-          updateData.cashPrice = formData.newCashPrice.toString();
-        }
-
-        await db
-          .update(products)
-          .set(updateData)
+      // Si es compra de mercadería vinculada a un producto:
+      if (
+        formData.type === "egreso" &&
+        formData.category === "compra_mercaderia" &&
+        formData.productId
+      ) {
+        const [product] = await tx
+          .select()
+          .from(products)
           .where(eq(products.id, formData.productId));
+
+        if (product) {
+          const currentStock = product.stock ?? 0;
+          const newStock = currentStock + units;
+          const newStatus = newStock > 0 ? "disponible" : product.status;
+
+          const updateData: any = {
+            stock: newStock,
+            status: newStatus,
+          };
+
+          // Si se indicó actualizar el costo del producto con el nuevo precio de compra unitario:
+          if (formData.updateCostPrice) {
+            const unitCost = Math.round(formData.amount / units);
+            updateData.costPrice = unitCost.toString();
+          }
+
+          // Si se indicó actualizar el precio de venta al público en el mismo paso:
+          if (formData.newCashPrice && formData.newCashPrice > 0) {
+            updateData.cashPrice = formData.newCashPrice.toString();
+          }
+
+          await tx
+            .update(products)
+            .set(updateData)
+            .where(eq(products.id, formData.productId));
+        }
       }
-    }
+
+      return createdMovement;
+    });
 
     revalidatePath("/admin");
     revalidatePath("/admin/caja");
@@ -182,24 +186,26 @@ export async function exchangeDollarsToPesos(data: {
 
     const arsAmount = Math.round(data.usdAmount * data.exchangeRate);
 
-    // 1. Egreso en caja USD
-    await db.insert(cashMovements).values({
-      type: "egreso",
-      category: "cambio_divisa",
-      amount: data.usdAmount.toString(),
-      currency: "USD",
-      paymentMethod: "efectivo",
-      description: `Venta/Canje de US$ ${data.usdAmount} billete a $${arsAmount.toLocaleString("es-AR")} ARS (Cotiz: $${data.exchangeRate})${data.notes ? ` - ${data.notes}` : ""}`,
-    });
+    await db.transaction(async (tx) => {
+      // 1. Egreso en caja USD
+      await tx.insert(cashMovements).values({
+        type: "egreso",
+        category: "cambio_divisa",
+        amount: data.usdAmount.toString(),
+        currency: "USD",
+        paymentMethod: "efectivo",
+        description: `Venta/Canje de US$ ${data.usdAmount} billete a $${arsAmount.toLocaleString("es-AR")} ARS (Cotiz: $${data.exchangeRate})${data.notes ? ` - ${data.notes}` : ""}`,
+      });
 
-    // 2. Ingreso en caja ARS
-    await db.insert(cashMovements).values({
-      type: "ingreso",
-      category: "cambio_divisa",
-      amount: arsAmount.toString(),
-      currency: "ARS",
-      paymentMethod: data.targetMethod,
-      description: `Ingreso por cambio de US$ ${data.usdAmount} billete (Cotiz: $${data.exchangeRate})${data.notes ? ` - ${data.notes}` : ""}`,
+      // 2. Ingreso en caja ARS
+      await tx.insert(cashMovements).values({
+        type: "ingreso",
+        category: "cambio_divisa",
+        amount: arsAmount.toString(),
+        currency: "ARS",
+        paymentMethod: data.targetMethod,
+        description: `Ingreso por cambio de US$ ${data.usdAmount} billete (Cotiz: $${data.exchangeRate})${data.notes ? ` - ${data.notes}` : ""}`,
+      });
     });
 
     revalidatePath("/admin");
@@ -220,54 +226,66 @@ export async function setInitialCashBalances(data: {
 }) {
   try {
     await requireSession();
-    // 1. Obtener balance actual
-    const currentRes = await getCashMovements();
-    if (!currentRes.success || !currentRes.data) {
-      throw new Error("No se pudo obtener el saldo actual de caja");
-    }
+    await db.transaction(async (tx) => {
+      // 1. Calcular balance actual dentro de la transacción
+      const list = await tx.select().from(cashMovements);
+      let efectivoTotal = 0;
+      let mercadoPagoTotal = 0;
+      let dolaresEfectivoTotal = 0;
 
-    const { efectivoTotal, mercadoPagoTotal, dolaresEfectivoTotal } = currentRes.data;
+      for (const item of list) {
+        const amount = parseFloat(item.amount);
+        const factor = item.type === "ingreso" ? 1 : -1;
+        if (item.currency === "USD") {
+          dolaresEfectivoTotal += factor * amount;
+        } else if (item.paymentMethod === "efectivo") {
+          efectivoTotal += factor * amount;
+        } else {
+          mercadoPagoTotal += factor * amount;
+        }
+      }
 
-    const diffCash = Math.round(Number(data.targetCashPesos)) - Math.round(Number(efectivoTotal));
-    const diffMP = Math.round(Number(data.targetMercadoPago)) - Math.round(Number(mercadoPagoTotal));
-    const diffUSD = Math.round(Number(data.targetDolares)) - Math.round(Number(dolaresEfectivoTotal || 0));
-    const reasonText = data.reason?.trim() || "Ajuste de Capital / Fondo Inicial";
+      const diffCash = Math.round(Number(data.targetCashPesos)) - Math.round(efectivoTotal);
+      const diffMP = Math.round(Number(data.targetMercadoPago)) - Math.round(mercadoPagoTotal);
+      const diffUSD = Math.round(Number(data.targetDolares)) - Math.round(dolaresEfectivoTotal);
+      const reasonText = data.reason?.trim() || "Ajuste de Capital / Fondo Inicial";
 
-    // 2. Ajuste Efectivo Pesos
-    if (Math.abs(diffCash) >= 1) {
-      await db.insert(cashMovements).values({
-        type: diffCash > 0 ? "ingreso" : "egreso",
-        category: "fondo_inicial",
-        amount: Math.abs(diffCash).toString(),
-        currency: "ARS",
-        paymentMethod: "efectivo",
-        description: `${reasonText} - Efectivo Billetes`,
-      });
-    }
+      // 2. Ajuste Efectivo Pesos
+      if (Math.abs(diffCash) >= 1) {
+        await tx.insert(cashMovements).values({
+          type: diffCash > 0 ? "ingreso" : "egreso",
+          category: "fondo_inicial",
+          amount: Math.abs(diffCash).toString(),
+          currency: "ARS",
+          paymentMethod: "efectivo",
+          description: `${reasonText} - Efectivo Billetes`,
+        });
+      }
 
-    // 3. Ajuste Mercado Pago Pesos
-    if (Math.abs(diffMP) >= 1) {
-      await db.insert(cashMovements).values({
-        type: diffMP > 0 ? "ingreso" : "egreso",
-        category: "fondo_inicial",
-        amount: Math.abs(diffMP).toString(),
-        currency: "ARS",
-        paymentMethod: "mercado_pago",
-        description: `${reasonText} - Mercado Pago / Digital`,
-      });
-    }
+      // 3. Ajuste Mercado Pago Pesos
+      if (Math.abs(diffMP) >= 1) {
+        await tx.insert(cashMovements).values({
+          type: diffMP > 0 ? "ingreso" : "egreso",
+          category: "fondo_inicial",
+          amount: Math.abs(diffMP).toString(),
+          currency: "ARS",
+          paymentMethod: "mercado_pago",
+          description: `${reasonText} - Mercado Pago / Digital`,
+        });
+      }
 
-    // 4. Ajuste Dólares Físicos (USD)
-    if (Math.abs(diffUSD) >= 1) {
-      await db.insert(cashMovements).values({
-        type: diffUSD > 0 ? "ingreso" : "egreso",
-        category: "fondo_inicial",
-        amount: Math.abs(diffUSD).toString(),
-        currency: "USD",
-        paymentMethod: "efectivo",
-        description: `${reasonText} - Dólares Billete Físico`,
-      });
-    }
+      // 4. Ajuste Dólares Físicos (USD)
+      if (Math.abs(diffUSD) >= 1) {
+        await tx.insert(cashMovements).values({
+          type: diffUSD > 0 ? "ingreso" : "egreso",
+          category: "fondo_inicial",
+          amount: Math.abs(diffUSD).toString(),
+          currency: "USD",
+          paymentMethod: "efectivo",
+          description: `${reasonText} - Dólares Billete Físico`,
+        });
+      }
+    });
 
     revalidatePath("/admin");
     revalidatePath("/admin/caja");

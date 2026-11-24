@@ -72,103 +72,104 @@ export async function createCredit(formData: {
     const lastInstallmentAmount =
       remainingToFinance - baseInstallmentAmount * (count - 1);
 
-    // 1. Insertar el crédito
-    const [newCredit] = await db
-      .insert(credits)
-      .values({
-        customerId: formData.customerId,
-        productId: formData.productId || null,
-        concept: formData.concept.trim(),
-        currency: creditCurrency,
-        exchangeRate: formData.exchangeRate ? formData.exchangeRate.toString() : null,
-        costAmount: (formData.costAmount || 0).toString(),
-        baseAmount: base.toString(),
-        interestRate: interest.toString(),
-        totalAmount: totalFinanced.toString(),
-        downPayment: downPayment.toString(),
-        remainingAmount: remainingToFinance.toString(),
-        installmentCount: count,
-        installmentAmount: baseInstallmentAmount.toString(),
-        frequency: formData.frequency,
-        frequencyDays: formData.frequencyDays || 7,
-        startDate: formData.startDate,
-        status: remainingToFinance <= 0 ? "finalizado" : "activo",
-        notes: formData.notes?.trim() || null,
-      })
-      .returning();
-
-    // 2. Generar las cuotas individuales (la última absorbe la diferencia de redondeo)
-    const installmentsToInsert = [];
-    for (let i = 0; i < count; i++) {
-      const dueDate = calculateDueDate(
-        formData.startDate,
-        i,
-        formData.frequency,
-        formData.frequencyDays || 7
-      );
-      const amountForThisInstallment =
-        i === count - 1 ? lastInstallmentAmount : baseInstallmentAmount;
-
-      installmentsToInsert.push({
-        creditId: newCredit.id,
-        installmentNumber: i + 1,
-        amount: amountForThisInstallment.toString(),
-        paidAmount: "0",
-        dueDate: dueDate,
-        status: "pendiente",
-      });
-    }
-
-    if (installmentsToInsert.length > 0) {
-      await db.insert(installments).values(installmentsToInsert);
-    }
-
-    // 3. Si hubo entrega inicial (down payment), registrar pago y movimiento de caja
-    if (downPayment > 0) {
-      const [initialPayment] = await db
-        .insert(payments)
+    // 1..4 Ejecutar creación de crédito, cuotas, seña y descuento de stock de forma atómica
+    const newCredit = await db.transaction(async (tx) => {
+      const [createdCredit] = await tx
+        .insert(credits)
         .values({
-          creditId: newCredit.id,
-          installmentId: null,
-          amount: downPayment.toString(),
+          customerId: formData.customerId,
+          productId: formData.productId || null,
+          concept: formData.concept.trim(),
           currency: creditCurrency,
-          paymentMethod: formData.downPaymentMethod || "efectivo",
-          notes: "Entrega inicial / Seña",
+          exchangeRate: formData.exchangeRate ? formData.exchangeRate.toString() : null,
+          costAmount: (formData.costAmount || 0).toString(),
+          baseAmount: base.toString(),
+          interestRate: interest.toString(),
+          totalAmount: totalFinanced.toString(),
+          downPayment: downPayment.toString(),
+          remainingAmount: remainingToFinance.toString(),
+          installmentCount: count,
+          installmentAmount: baseInstallmentAmount.toString(),
+          frequency: formData.frequency,
+          frequencyDays: formData.frequencyDays || 7,
+          startDate: formData.startDate,
+          status: remainingToFinance <= 0 ? "finalizado" : "activo",
+          notes: formData.notes?.trim() || null,
         })
         .returning();
 
-      await db.insert(cashMovements).values({
-        type: "ingreso",
-        category: "entrega_inicial",
-        amount: downPayment.toString(),
-        currency: creditCurrency,
-        paymentMethod: formData.downPaymentMethod || "efectivo",
-        description: `Entrega inicial por ${formData.concept} (Crédito #${newCredit.id})`,
-        creditId: newCredit.id,
-        paymentId: initialPayment.id,
-      });
-    }
+      const installmentsToInsert = [];
+      for (let i = 0; i < count; i++) {
+        const dueDate = calculateDueDate(
+          formData.startDate,
+          i,
+          formData.frequency,
+          formData.frequencyDays || 7
+        );
+        const amountForThisInstallment =
+          i === count - 1 ? lastInstallmentAmount : baseInstallmentAmount;
 
-    // 4. Si se seleccionó un producto del inventario, descontar stock en 1
-    if (formData.productId) {
-      const [product] = await db
-        .select()
-        .from(products)
-        .where(eq(products.id, formData.productId));
-
-      if (product) {
-        const currentStock = product.stock ?? 1;
-        const newStock = Math.max(0, currentStock - 1);
-        const newStatus = newStock <= 0 ? "agotado" : "disponible";
-        await db
-          .update(products)
-          .set({
-            stock: newStock,
-            status: newStatus,
-          })
-          .where(eq(products.id, formData.productId));
+        installmentsToInsert.push({
+          creditId: createdCredit.id,
+          installmentNumber: i + 1,
+          amount: amountForThisInstallment.toString(),
+          paidAmount: "0",
+          dueDate: dueDate,
+          status: "pendiente",
+        });
       }
-    }
+
+      if (installmentsToInsert.length > 0) {
+        await tx.insert(installments).values(installmentsToInsert);
+      }
+
+      if (downPayment > 0) {
+        const [initialPayment] = await tx
+          .insert(payments)
+          .values({
+            creditId: createdCredit.id,
+            installmentId: null,
+            amount: downPayment.toString(),
+            currency: creditCurrency,
+            paymentMethod: formData.downPaymentMethod || "efectivo",
+            notes: "Entrega inicial / Seña",
+          })
+          .returning();
+
+        await tx.insert(cashMovements).values({
+          type: "ingreso",
+          category: "entrega_inicial",
+          amount: downPayment.toString(),
+          currency: creditCurrency,
+          paymentMethod: formData.downPaymentMethod || "efectivo",
+          description: `Entrega inicial por ${formData.concept} (Crédito #${createdCredit.id})`,
+          creditId: createdCredit.id,
+          paymentId: initialPayment.id,
+        });
+      }
+
+      if (formData.productId) {
+        const [product] = await tx
+          .select()
+          .from(products)
+          .where(eq(products.id, formData.productId));
+
+        if (product) {
+          const currentStock = product.stock ?? 1;
+          const newStock = Math.max(0, currentStock - 1);
+          const newStatus = newStock <= 0 ? "agotado" : "disponible";
+          await tx
+            .update(products)
+            .set({
+              stock: newStock,
+              status: newStatus,
+            })
+            .where(eq(products.id, formData.productId));
+        }
+      }
+
+      return createdCredit;
+    });
 
     revalidatePath("/admin");
     revalidatePath("/admin/creditos");
@@ -194,143 +195,156 @@ export async function registerPayment(data: {
 }) {
   try {
     await requireSession();
-    const credit = await db.query.credits.findFirst({
-      where: eq(credits.id, data.creditId),
-      with: {
-        customer: true,
-        installments: {
-          orderBy: [installments.installmentNumber],
-        },
-      },
-    });
-
-    if (!credit) throw new Error("Crédito no encontrado");
-
     const paymentAmount = Number(data.amount);
     if (paymentAmount <= 0) throw new Error("El monto del pago debe ser mayor a cero");
 
-    const isCreditUSD = credit.currency === "USD";
-    const payInCurrency = data.payInCurrency || (isCreditUSD ? "USD" : "ARS");
+    const txResult = await db.transaction(async (tx) => {
+      const credit = await tx.query.credits.findFirst({
+        where: eq(credits.id, data.creditId),
+        with: {
+          customer: true,
+          installments: {
+            orderBy: [installments.installmentNumber],
+          },
+        },
+      });
 
-    // 1. Insertar el pago
-    const [newPayment] = await db
-      .insert(payments)
-      .values({
-        creditId: credit.id,
-        installmentId: data.installmentId || null,
-        amount: paymentAmount.toString(),
-        currency: credit.currency || "ARS",
-        exchangeRate: data.exchangeRate ? data.exchangeRate.toString() : null,
-        amountInArs: data.amountInArs ? data.amountInArs.toString() : null,
+      if (!credit) throw new Error("Crédito no encontrado");
+
+      const isCreditUSD = credit.currency === "USD";
+      const payInCurrency = data.payInCurrency || (isCreditUSD ? "USD" : "ARS");
+
+      // 1. Insertar el pago
+      const [newPayment] = await tx
+        .insert(payments)
+        .values({
+          creditId: credit.id,
+          installmentId: data.installmentId || null,
+          amount: paymentAmount.toString(),
+          currency: credit.currency || "ARS",
+          exchangeRate: data.exchangeRate ? data.exchangeRate.toString() : null,
+          amountInArs: data.amountInArs ? data.amountInArs.toString() : null,
+          paymentMethod: data.paymentMethod,
+          notes: data.notes?.trim() || null,
+        })
+        .returning();
+
+      // 2. Registrar en Caja automáticamente
+      const cashAmount =
+        payInCurrency === "ARS" && isCreditUSD && data.amountInArs
+          ? data.amountInArs.toString()
+          : paymentAmount.toString();
+
+      const cashDesc =
+        isCreditUSD && payInCurrency === "ARS"
+          ? `Cobro a ${credit.customer.name} por "${credit.concept}" (US$ ${paymentAmount} al cambio $${data.exchangeRate})`
+          : `Cobro a ${credit.customer.name} ${credit.customer.lastName || ""} por "${credit.concept}"`;
+
+      await tx.insert(cashMovements).values({
+        type: "ingreso",
+        category: "cobro_cuota",
+        amount: cashAmount,
+        currency: payInCurrency,
         paymentMethod: data.paymentMethod,
-        notes: data.notes?.trim() || null,
-      })
-      .returning();
+        description: cashDesc,
+        creditId: credit.id,
+        paymentId: newPayment.id,
+      });
 
-    // 2. Registrar en Caja automáticamente
-    const cashAmount =
-      payInCurrency === "ARS" && isCreditUSD && data.amountInArs
-        ? data.amountInArs.toString()
-        : paymentAmount.toString();
+      // 3. Actualizar la cuota específica si se proveyó
+      if (data.installmentId) {
+        const targetInst = credit.installments.find((i) => i.id === data.installmentId);
+        if (targetInst) {
+          const currentPaid = parseFloat(targetInst.paidAmount || "0");
+          const newPaid = currentPaid + paymentAmount;
+          const totalInstAmount = parseFloat(targetInst.amount);
 
-    const cashDesc =
-      isCreditUSD && payInCurrency === "ARS"
-        ? `Cobro a ${credit.customer.name} por "${credit.concept}" (US$ ${paymentAmount} al cambio $${data.exchangeRate})`
-        : `Cobro a ${credit.customer.name} ${credit.customer.lastName || ""} por "${credit.concept}"`;
+          const newStatus = newPaid >= totalInstAmount ? "pagada" : "parcial";
 
-    await db.insert(cashMovements).values({
-      type: "ingreso",
-      category: "cobro_cuota",
-      amount: cashAmount,
-      currency: payInCurrency,
-      paymentMethod: data.paymentMethod,
-      description: cashDesc,
-      creditId: credit.id,
-      paymentId: newPayment.id,
-    });
+          await tx
+            .update(installments)
+            .set({
+              paidAmount: newPaid.toString(),
+              status: newStatus,
+              paidAt: newStatus === "pagada" ? new Date() : null,
+            })
+            .where(eq(installments.id, targetInst.id));
+        }
+      } else {
+        // Si no se eligió una cuota en específico, aplicar pago en cascada a las más antiguas pendientes
+        let remainingToApply = paymentAmount;
+        for (const inst of credit.installments) {
+          if (remainingToApply <= 0) break;
+          if (inst.status !== "pagada") {
+            const instAmount = parseFloat(inst.amount);
+            const instPaid = parseFloat(inst.paidAmount || "0");
+            const instDue = instAmount - instPaid;
 
-    // 3. Actualizar la cuota específica si se proveyó
-    if (data.installmentId) {
-      const targetInst = credit.installments.find((i) => i.id === data.installmentId);
-      if (targetInst) {
-        const currentPaid = parseFloat(targetInst.paidAmount || "0");
-        const newPaid = currentPaid + paymentAmount;
-        const totalInstAmount = parseFloat(targetInst.amount);
-
-        const newStatus = newPaid >= totalInstAmount ? "pagada" : "parcial";
-
-        await db
-          .update(installments)
-          .set({
-            paidAmount: newPaid.toString(),
-            status: newStatus,
-            paidAt: newStatus === "pagada" ? new Date() : null,
-          })
-          .where(eq(installments.id, targetInst.id));
-      }
-    } else {
-      // Si no se eligió una cuota en específico, aplicar pago en cascada a las más antiguas pendientes
-      let remainingToApply = paymentAmount;
-      for (const inst of credit.installments) {
-        if (remainingToApply <= 0) break;
-        if (inst.status !== "pagada") {
-          const instAmount = parseFloat(inst.amount);
-          const instPaid = parseFloat(inst.paidAmount || "0");
-          const instDue = instAmount - instPaid;
-
-          if (remainingToApply >= instDue) {
-            await db
-              .update(installments)
-              .set({
-                paidAmount: instAmount.toString(),
-                status: "pagada",
-                paidAt: new Date(),
-              })
-              .where(eq(installments.id, inst.id));
-            remainingToApply -= instDue;
-          } else {
-            await db
-              .update(installments)
-              .set({
-                paidAmount: (instPaid + remainingToApply).toString(),
-                status: "parcial",
-              })
-              .where(eq(installments.id, inst.id));
-            remainingToApply = 0;
+            if (remainingToApply >= instDue) {
+              await tx
+                .update(installments)
+                .set({
+                  paidAmount: instAmount.toString(),
+                  status: "pagada",
+                  paidAt: new Date(),
+                })
+                .where(eq(installments.id, inst.id));
+              remainingToApply -= instDue;
+            } else {
+              await tx
+                .update(installments)
+                .set({
+                  paidAmount: (instPaid + remainingToApply).toString(),
+                  status: "parcial",
+                })
+                .where(eq(installments.id, inst.id));
+              remainingToApply = 0;
+            }
           }
         }
       }
-    }
 
-    // 4. Actualizar saldo restante del crédito
-    const currentRemaining = parseFloat(credit.remainingAmount);
-    const newRemaining = Math.max(0, currentRemaining - paymentAmount);
-    const isCompleted = newRemaining === 0;
+      // 4. Actualizar saldo restante del crédito
+      const currentRemaining = parseFloat(credit.remainingAmount);
+      const newRemaining = Math.max(0, currentRemaining - paymentAmount);
+      const isCompleted = newRemaining === 0;
 
-    await db
-      .update(credits)
-      .set({
-        remainingAmount: newRemaining.toString(),
-        status: isCompleted ? "finalizado" : "activo",
-      })
-      .where(eq(credits.id, credit.id));
+      await tx
+        .update(credits)
+        .set({
+          remainingAmount: newRemaining.toString(),
+          status: isCompleted ? "finalizado" : "activo",
+        })
+        .where(eq(credits.id, credit.id));
 
-    revalidatePath("/admin");
-    revalidatePath("/admin/creditos");
-    revalidatePath(`/admin/creditos/${credit.id}`);
-    revalidatePath("/admin/caja");
-
-    return {
-      success: true,
-      data: {
+      return {
+        creditId: credit.id,
         paymentId: newPayment.id,
         newRemaining,
         isCompleted,
         customerName: `${credit.customer.name} ${credit.customer.lastName || ""}`.trim(),
         customerPhone: credit.customer.phone,
         concept: credit.concept,
-        amount: paymentAmount,
         currency: credit.currency || "ARS",
+      };
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/creditos");
+    revalidatePath(`/admin/creditos/${txResult.creditId}`);
+    revalidatePath("/admin/caja");
+
+    return {
+      success: true,
+      data: {
+        paymentId: txResult.paymentId,
+        newRemaining: txResult.newRemaining,
+        isCompleted: txResult.isCompleted,
+        customerName: txResult.customerName,
+        customerPhone: txResult.customerPhone,
+        concept: txResult.concept,
+        amount: paymentAmount,
+        currency: txResult.currency,
         exchangeRate: data.exchangeRate,
         amountInArs: data.amountInArs,
         paymentMethod: data.paymentMethod,
@@ -490,139 +504,145 @@ export async function revertPayment(paymentId: number) {
   try {
     await requireSession();
 
-    const targetPayment = await db.query.payments.findFirst({
-      where: eq(payments.id, paymentId),
-      with: {
-        credit: {
-          with: {
-            installments: {
-              orderBy: [asc(installments.installmentNumber)],
+    const result = await db.transaction(async (tx) => {
+      const targetPayment = await tx.query.payments.findFirst({
+        where: eq(payments.id, paymentId),
+        with: {
+          credit: {
+            with: {
+              installments: {
+                orderBy: [asc(installments.installmentNumber)],
+              },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!targetPayment || !targetPayment.credit) {
-      return { success: false, error: "Pago no encontrado." };
-    }
+      if (!targetPayment || !targetPayment.credit) {
+        return { success: false, error: "Pago no encontrado." };
+      }
 
-    const credit = targetPayment.credit;
-    if (credit.status === "cancelado") {
-      return {
-        success: false,
-        error: "No se puede anular un pago de un crédito cancelado.",
-      };
-    }
+      const credit = targetPayment.credit;
+      if (credit.status === "cancelado") {
+        return {
+          success: false,
+          error: "No se puede anular un pago de un crédito cancelado.",
+        };
+      }
 
-    const linkedMovements = await db
-      .select()
-      .from(cashMovements)
-      .where(eq(cashMovements.paymentId, paymentId));
-
-    const isDownPayment =
-      targetPayment.notes === "Entrega inicial / Seña" ||
-      linkedMovements.some((m) => m.category === "entrega_inicial");
-
-    if (isDownPayment) {
-      return {
-        success: false,
-        error:
-          "La entrega inicial no se puede anular por separado. Si hubo un error, cancelá el crédito completo.",
-      };
-    }
-
-    // 1. Eliminar movimiento de caja asociado y el pago
-    await db.delete(cashMovements).where(eq(cashMovements.paymentId, paymentId));
-    await db.delete(payments).where(eq(payments.id, paymentId));
-
-    // 2. Recalcular cuotas y saldo restante de forma determinística con los pagos restantes
-    const remainingPayments = await db
-      .select()
-      .from(payments)
-      .where(eq(payments.creditId, credit.id))
-      .orderBy(asc(payments.paymentDate), asc(payments.id));
-
-    const remainingPaymentIds = remainingPayments.map((p) => p.id);
-    const downPaymentIds = new Set<number>();
-
-    if (remainingPaymentIds.length > 0) {
-      const remainingCashMovs = await db
+      const linkedMovements = await tx
         .select()
         .from(cashMovements)
-        .where(inArray(cashMovements.paymentId, remainingPaymentIds));
+        .where(eq(cashMovements.paymentId, paymentId));
 
-      for (const m of remainingCashMovs) {
-        if (m.paymentId && m.category === "entrega_inicial") {
-          downPaymentIds.add(m.paymentId);
-        }
+      const isDownPayment =
+        targetPayment.notes === "Entrega inicial / Seña" ||
+        linkedMovements.some((m) => m.category === "entrega_inicial");
+
+      if (isDownPayment) {
+        return {
+          success: false,
+          error:
+            "La entrega inicial no se puede anular por separado. Si hubo un error, cancelá el crédito completo.",
+        };
       }
-    }
 
-    const remainingNonDownPayments = remainingPayments.filter(
-      (p) => p.notes !== "Entrega inicial / Seña" && !downPaymentIds.has(p.id)
-    );
+      // 1. Eliminar movimiento de caja asociado y el pago
+      await tx.delete(cashMovements).where(eq(cashMovements.paymentId, paymentId));
+      await tx.delete(payments).where(eq(payments.id, paymentId));
 
-    const paidMap = new Map<number, number>();
-    for (const inst of credit.installments) {
-      paidMap.set(inst.id, 0);
-    }
+      // 2. Recalcular cuotas y saldo restante de forma determinística con los pagos restantes
+      const remainingPayments = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.creditId, credit.id))
+        .orderBy(asc(payments.paymentDate), asc(payments.id));
 
-    for (const p of remainingNonDownPayments) {
-      const amt = parseFloat(p.amount || "0");
-      if (amt <= 0) continue;
+      const remainingPaymentIds = remainingPayments.map((p) => p.id);
+      const downPaymentIds = new Set<number>();
 
-      if (p.installmentId && paidMap.has(p.installmentId)) {
-        paidMap.set(p.installmentId, (paidMap.get(p.installmentId) ?? 0) + amt);
-      } else {
-        let remainingToApply = amt;
-        for (const inst of credit.installments) {
-          if (remainingToApply <= 0) break;
-          const instAmount = parseFloat(inst.amount || "0");
-          const currentPaid = paidMap.get(inst.id) ?? 0;
-          const instDue = instAmount - currentPaid;
-          if (instDue > 0) {
-            const applied = Math.min(remainingToApply, instDue);
-            paidMap.set(inst.id, currentPaid + applied);
-            remainingToApply -= applied;
+      if (remainingPaymentIds.length > 0) {
+        const remainingCashMovs = await tx
+          .select()
+          .from(cashMovements)
+          .where(inArray(cashMovements.paymentId, remainingPaymentIds));
+
+        for (const m of remainingCashMovs) {
+          if (m.paymentId && m.category === "entrega_inicial") {
+            downPaymentIds.add(m.paymentId);
           }
         }
       }
-    }
 
-    for (const inst of credit.installments) {
-      const paid = paidMap.get(inst.id) ?? 0;
-      const instAmount = parseFloat(inst.amount || "0");
-      const newStatus =
-        paid >= instAmount ? "pagada" : paid > 0 ? "parcial" : "pendiente";
+      const remainingNonDownPayments = remainingPayments.filter(
+        (p) => p.notes !== "Entrega inicial / Seña" && !downPaymentIds.has(p.id)
+      );
 
-      await db
-        .update(installments)
+      const paidMap = new Map<number, number>();
+      for (const inst of credit.installments) {
+        paidMap.set(inst.id, 0);
+      }
+
+      for (const p of remainingNonDownPayments) {
+        const amt = parseFloat(p.amount || "0");
+        if (amt <= 0) continue;
+
+        if (p.installmentId && paidMap.has(p.installmentId)) {
+          paidMap.set(p.installmentId, (paidMap.get(p.installmentId) ?? 0) + amt);
+        } else {
+          let remainingToApply = amt;
+          for (const inst of credit.installments) {
+            if (remainingToApply <= 0) break;
+            const instAmount = parseFloat(inst.amount || "0");
+            const currentPaid = paidMap.get(inst.id) ?? 0;
+            const instDue = instAmount - currentPaid;
+            if (instDue > 0) {
+              const applied = Math.min(remainingToApply, instDue);
+              paidMap.set(inst.id, currentPaid + applied);
+              remainingToApply -= applied;
+            }
+          }
+        }
+      }
+
+      for (const inst of credit.installments) {
+        const paid = paidMap.get(inst.id) ?? 0;
+        const instAmount = parseFloat(inst.amount || "0");
+        const newStatus =
+          paid >= instAmount ? "pagada" : paid > 0 ? "parcial" : "pendiente";
+
+        await tx
+          .update(installments)
+          .set({
+            paidAmount: paid.toString(),
+            status: newStatus,
+            paidAt: newStatus === "pagada" ? (inst.paidAt ?? new Date()) : null,
+          })
+          .where(eq(installments.id, inst.id));
+      }
+
+      const totalInstallmentPayments = remainingNonDownPayments.reduce(
+        (acc, p) => acc + parseFloat(p.amount || "0"),
+        0
+      );
+      const financedAmount = Math.max(
+        0,
+        parseFloat(credit.totalAmount || "0") - parseFloat(credit.downPayment || "0")
+      );
+      const newRemaining = Math.max(0, financedAmount - totalInstallmentPayments);
+
+      await tx
+        .update(credits)
         .set({
-          paidAmount: paid.toString(),
-          status: newStatus,
-          paidAt: newStatus === "pagada" ? (inst.paidAt ?? new Date()) : null,
+          remainingAmount: newRemaining.toString(),
+          status: newRemaining <= 0 ? "finalizado" : "activo",
         })
-        .where(eq(installments.id, inst.id));
-    }
+        .where(eq(credits.id, credit.id));
 
-    const totalInstallmentPayments = remainingNonDownPayments.reduce(
-      (acc, p) => acc + parseFloat(p.amount || "0"),
-      0
-    );
-    const financedAmount = Math.max(
-      0,
-      parseFloat(credit.totalAmount || "0") - parseFloat(credit.downPayment || "0")
-    );
-    const newRemaining = Math.max(0, financedAmount - totalInstallmentPayments);
+      return { success: true };
+    });
 
-    await db
-      .update(credits)
-      .set({
-        remainingAmount: newRemaining.toString(),
-        status: newRemaining <= 0 ? "finalizado" : "activo",
-      })
-      .where(eq(credits.id, credit.id));
+    if (!result.success) return result;
 
     revalidatePath("/admin");
     revalidatePath("/admin/creditos");
@@ -643,47 +663,53 @@ export async function cancelCredit(
   try {
     await requireSession();
 
-    const [credit] = await db
-      .select()
-      .from(credits)
-      .where(eq(credits.id, creditId));
-
-    if (!credit) {
-      return { success: false, error: "Crédito no encontrado." };
-    }
-    if (credit.status === "cancelado") {
-      return { success: false, error: "El crédito ya está cancelado." };
-    }
-
-    await db
-      .update(credits)
-      .set({
-        status: "cancelado",
-        remainingAmount: "0",
-      })
-      .where(eq(credits.id, creditId));
-
-    if (options?.revertCash !== false) {
-      await db.delete(cashMovements).where(eq(cashMovements.creditId, creditId));
-    }
-
-    if (options?.restoreStock !== false && credit.productId) {
-      const [product] = await db
+    const result = await db.transaction(async (tx) => {
+      const [credit] = await tx
         .select()
-        .from(products)
-        .where(eq(products.id, credit.productId));
+        .from(credits)
+        .where(eq(credits.id, creditId));
 
-      if (product) {
-        const newStock = (product.stock ?? 0) + 1;
-        await db
-          .update(products)
-          .set({
-            stock: newStock,
-            status: "disponible",
-          })
-          .where(eq(products.id, credit.productId));
+      if (!credit) {
+        return { success: false, error: "Crédito no encontrado." };
       }
-    }
+      if (credit.status === "cancelado") {
+        return { success: false, error: "El crédito ya está cancelado." };
+      }
+
+      await tx
+        .update(credits)
+        .set({
+          status: "cancelado",
+          remainingAmount: "0",
+        })
+        .where(eq(credits.id, creditId));
+
+      if (options?.revertCash !== false) {
+        await tx.delete(cashMovements).where(eq(cashMovements.creditId, creditId));
+      }
+
+      if (options?.restoreStock !== false && credit.productId) {
+        const [product] = await tx
+          .select()
+          .from(products)
+          .where(eq(products.id, credit.productId));
+
+        if (product) {
+          const newStock = (product.stock ?? 0) + 1;
+          await tx
+            .update(products)
+            .set({
+              stock: newStock,
+              status: "disponible",
+            })
+            .where(eq(products.id, credit.productId));
+        }
+      }
+
+      return { success: true };
+    });
+
+    if (!result.success) return result;
 
     revalidatePath("/admin");
     revalidatePath("/admin/creditos");
