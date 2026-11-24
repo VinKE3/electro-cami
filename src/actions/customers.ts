@@ -5,9 +5,11 @@ import { customers, credits, installments } from "@/db/schema";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getArgentinaTodayStr } from "@/lib/utils";
+import { requireSession } from "@/lib/auth";
 
 export async function getCustomers() {
   try {
+    await requireSession();
     const list = await db
       .select()
       .from(customers)
@@ -85,6 +87,7 @@ export async function getCustomers() {
 
 export async function getCustomerById(id: number) {
   try {
+    await requireSession();
     const customer = await db.query.customers.findFirst({
       where: eq(customers.id, id),
       with: {
@@ -114,6 +117,7 @@ export async function createCustomer(formData: {
   notes?: string;
 }) {
   try {
+    await requireSession();
     const [newCustomer] = await db
       .insert(customers)
       .values({
@@ -147,6 +151,7 @@ export async function updateCustomer(
   }
 ) {
   try {
+    await requireSession();
     const [updated] = await db
       .update(customers)
       .set({
@@ -170,6 +175,7 @@ export async function updateCustomer(
 
 export async function deleteCustomer(id: number) {
   try {
+    await requireSession();
     // Verificar si tiene créditos activos
     const activeCredits = await db
       .select()

@@ -4,9 +4,11 @@ import { db } from "@/db";
 import { suppliers, products } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth";
 
 export async function getSuppliers() {
   try {
+    await requireSession();
     const list = await db
       .select()
       .from(suppliers)
@@ -43,6 +45,7 @@ export async function createSupplier(formData: {
   notes?: string;
 }) {
   try {
+    await requireSession();
     const [newSupplier] = await db
       .insert(suppliers)
       .values({
@@ -74,6 +77,7 @@ export async function updateSupplier(
   }
 ) {
   try {
+    await requireSession();
     const [updated] = await db
       .update(suppliers)
       .set({
@@ -96,6 +100,7 @@ export async function updateSupplier(
 
 export async function deleteSupplier(id: number) {
   try {
+    await requireSession();
     await db.delete(suppliers).where(eq(suppliers.id, id));
     revalidatePath("/admin/proveedores");
     return { success: true };

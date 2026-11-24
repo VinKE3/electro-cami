@@ -9,6 +9,7 @@ import {
   setSessionCookie,
   clearSessionCookie,
   getSession,
+  requireSession,
 } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -84,6 +85,7 @@ export async function getCurrentUser() {
 
 export async function getUsers() {
   try {
+    await requireSession();
     await ensureInitialAdmin();
     const list = await db
       .select({

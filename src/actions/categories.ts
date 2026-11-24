@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { eq, isNull, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth";
 
 export interface CategoryItem {
   id: number;
@@ -63,6 +64,7 @@ export async function createCategory(data: {
   error?: string;
 }> {
   try {
+    await requireSession();
     const trimmedName = data.name.trim();
     if (!trimmedName) {
       return { success: false, error: "El nombre de la categoría no puede estar vacío." };
@@ -96,6 +98,7 @@ export async function updateCategory(
   error?: string;
 }> {
   try {
+    await requireSession();
     const trimmedName = name.trim();
     if (!trimmedName) {
       return { success: false, error: "El nombre no puede estar vacío." };
@@ -123,6 +126,7 @@ export async function deleteCategory(id: number): Promise<{
   error?: string;
 }> {
   try {
+    await requireSession();
     await db.delete(categories).where(eq(categories.id, id));
 
     revalidatePath("/admin/productos");

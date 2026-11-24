@@ -4,9 +4,11 @@ import { db } from "@/db";
 import { cashMovements, products } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth";
 
 export async function getCashMovements() {
   try {
+    await requireSession();
     const list = await db.query.cashMovements.findMany({
       orderBy: [desc(cashMovements.date)],
       with: {
@@ -82,6 +84,7 @@ export async function createCashMovement(formData: {
   newCashPrice?: number | null;
 }) {
   try {
+    await requireSession();
     if (formData.amount <= 0) throw new Error("El monto debe ser mayor a 0");
 
     const currency = formData.currency || "ARS";
@@ -155,6 +158,7 @@ export async function createCashMovement(formData: {
 
 export async function deleteCashMovement(id: number) {
   try {
+    await requireSession();
     await db.delete(cashMovements).where(eq(cashMovements.id, id));
     revalidatePath("/admin");
     revalidatePath("/admin/caja");
@@ -172,6 +176,7 @@ export async function exchangeDollarsToPesos(data: {
   notes?: string;
 }) {
   try {
+    await requireSession();
     if (data.usdAmount <= 0) throw new Error("El monto en dólares debe ser mayor a 0");
     if (data.exchangeRate <= 0) throw new Error("La cotización debe ser mayor a 0");
 
@@ -214,6 +219,7 @@ export async function setInitialCashBalances(data: {
   reason?: string;
 }) {
   try {
+    await requireSession();
     // 1. Obtener balance actual
     const currentRes = await getCashMovements();
     if (!currentRes.success || !currentRes.data) {

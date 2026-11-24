@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { products, suppliers, cashMovements } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getSession, requireSession } from "@/lib/auth";
 
 export async function getProducts(options?: {
   publishedOnly?: boolean;
@@ -11,6 +12,10 @@ export async function getProducts(options?: {
   subcategory?: string;
 }) {
   try {
+    if (!options?.publishedOnly) {
+      await requireSession();
+    }
+
     const list = await db.query.products.findMany({
       where: (p, { eq, and }) => {
         const conditions = [];
@@ -30,6 +35,21 @@ export async function getProducts(options?: {
       },
       orderBy: [desc(products.createdAt)],
     });
+
+    if (options?.publishedOnly) {
+      const session = await getSession();
+      if (!session) {
+        return {
+          success: true,
+          data: list.map((p) => ({
+            ...p,
+            costPrice: "0",
+            supplierId: null,
+            supplier: null,
+          })),
+        };
+      }
+    }
 
     return { success: true, data: list };
   } catch (error: any) {
@@ -56,6 +76,7 @@ export async function createProduct(formData: {
   paymentMethod?: "efectivo" | "mercado_pago";
 }) {
   try {
+    await requireSession();
     const stockVal = formData.stock !== undefined ? Number(formData.stock) : 1;
     const computedStatus =
       formData.status || (stockVal > 0 ? "disponible" : "agotado");
@@ -126,6 +147,7 @@ export async function updateProduct(
   }
 ) {
   try {
+    await requireSession();
     const stockVal = formData.stock !== undefined ? Number(formData.stock) : 1;
     let computedStatus = formData.status || "disponible";
     if (stockVal <= 0 && computedStatus === "disponible") {
@@ -168,6 +190,7 @@ export async function updateProduct(
 
 export async function adjustProductStock(id: number, delta: number) {
   try {
+    await requireSession();
     const [existing] = await db.select().from(products).where(eq(products.id, id));
     if (!existing) throw new Error("Producto no encontrado");
 
@@ -197,6 +220,7 @@ export async function adjustProductStock(id: number, delta: number) {
 
 export async function deleteProduct(id: number) {
   try {
+    await requireSession();
     await db.delete(products).where(eq(products.id, id));
     revalidatePath("/admin/productos");
     revalidatePath("/catalogo");

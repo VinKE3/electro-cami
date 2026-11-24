@@ -12,6 +12,7 @@ import {
 import { eq, desc, and, lte, gte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getArgentinaTodayStr, getArgentinaDateOffsetStr } from "@/lib/utils";
+import { requireSession } from "@/lib/auth";
 
 // Función para calcular fecha de vencimiento según frecuencia
 function calculateDueDate(startDateStr: string, index: number, frequency: string, frequencyDays: number): string {
@@ -54,6 +55,7 @@ export async function createCredit(formData: {
   notes?: string;
 }) {
   try {
+    await requireSession();
     const base = Number(formData.baseAmount);
     const interest = Number(formData.interestRate || 0);
     const downPayment = Number(formData.downPayment || 0);
@@ -187,6 +189,7 @@ export async function registerPayment(data: {
   amountInArs?: number;
 }) {
   try {
+    await requireSession();
     const credit = await db.query.credits.findFirst({
       where: eq(credits.id, data.creditId),
       with: {
@@ -337,6 +340,7 @@ export async function registerPayment(data: {
 
 export async function getCredits(options?: { status?: string }) {
   try {
+    await requireSession();
     const list = await db.query.credits.findMany({
       where: (c, { eq }) => {
         if (options?.status && options.status !== "todos") {
@@ -366,6 +370,7 @@ export async function getCredits(options?: { status?: string }) {
 
 export async function getCreditById(id: number) {
   try {
+    await requireSession();
     const credit = await db.query.credits.findFirst({
       where: eq(credits.id, id),
       with: {
@@ -390,6 +395,7 @@ export async function getCreditById(id: number) {
 // Obtener cobros para el Dashboard (Hoy, Esta semana, Vencidos)
 export async function getDashboardOverview() {
   try {
+    await requireSession();
     const todayStr = getArgentinaTodayStr();
     const nextWeekStr = getArgentinaDateOffsetStr(7);
 
