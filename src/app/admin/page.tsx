@@ -22,6 +22,16 @@ export default async function AdminDashboardPage() {
     overdue: [],
     dueToday: [],
     upcomingThisWeek: [],
+    monthlyProfit: {
+      monthPrefix: "",
+      salesCount: 0,
+      grossSalesArs: 0,
+      costArs: 0,
+      netProfitArs: 0,
+      grossSalesUsd: 0,
+      costUsd: 0,
+      netProfitUsd: 0,
+    },
   };
 
   const customers = customersRes.success && customersRes.data ? customersRes.data : [];

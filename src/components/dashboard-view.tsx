@@ -31,6 +31,16 @@ interface DashboardViewProps {
     overdue: any[];
     dueToday: any[];
     upcomingThisWeek: any[];
+    monthlyProfit?: {
+      monthPrefix: string;
+      salesCount: number;
+      grossSalesArs: number;
+      costArs: number;
+      netProfitArs: number;
+      grossSalesUsd: number;
+      costUsd: number;
+      netProfitUsd: number;
+    };
   };
   customers: any[];
   products: any[];
@@ -254,6 +264,65 @@ export function DashboardView({
           </p>
         </div>
       </div>
+
+      {/* RENDIMIENTO DEL MES */}
+      {overview.monthlyProfit && (
+        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Rendimiento del Mes ({overview.monthlyProfit.monthPrefix || "Actual"})
+            </span>
+            <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
+              {overview.monthlyProfit.salesCount}{" "}
+              {overview.monthlyProfit.salesCount === 1 ? "venta financiada" : "ventas financiadas"} en el mes (sin cancelados)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 sm:gap-6">
+            <div>
+              <span className="text-[10px] font-bold uppercase text-[#64748B] dark:text-[#94A3B8] block">
+                Facturación
+              </span>
+              <span className="text-sm sm:text-base font-black text-[#1E293B] dark:text-[#F8FAFC]">
+                {formatCurrency(overview.monthlyProfit.grossSalesArs, "ARS")}
+              </span>
+              {overview.monthlyProfit.grossSalesUsd > 0 && (
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 block">
+                  + {formatCurrency(overview.monthlyProfit.grossSalesUsd, "USD")}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase text-[#64748B] dark:text-[#94A3B8] block">
+                Costo Mercadería
+              </span>
+              <span className="text-sm sm:text-base font-black text-[#64748B] dark:text-[#94A3B8]">
+                {formatCurrency(overview.monthlyProfit.costArs, "ARS")}
+              </span>
+              {overview.monthlyProfit.costUsd > 0 && (
+                <span className="text-[11px] font-bold text-[#64748B] dark:text-[#94A3B8] block">
+                  + {formatCurrency(overview.monthlyProfit.costUsd, "USD")}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 block">
+                Ganancia Neta Est.
+              </span>
+              <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(overview.monthlyProfit.netProfitArs, "ARS")}
+              </span>
+              {overview.monthlyProfit.netProfitUsd !== 0 && (
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 block">
+                  + {formatCurrency(overview.monthlyProfit.netProfitUsd, "USD")}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SECCIÓN PRINCIPAL DE COBRANZAS: PESTAÑAS Y LISTADO */}
       <div className="bg-white dark:bg-[#1E293B] rounded-3xl border border-[#E5E7EB] dark:border-[#334155] overflow-hidden shadow-xs">

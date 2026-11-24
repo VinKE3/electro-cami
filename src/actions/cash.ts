@@ -5,6 +5,7 @@ import { cashMovements, products } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
+import { calculateCashSummary } from "@/lib/finance";
 
 export async function getCashMovements() {
   try {
@@ -16,53 +17,13 @@ export async function getCashMovements() {
       },
     });
 
-    // Calcular balances en Pesos (ARS) y Dólares (USD)
-    let efectivoTotal = 0;
-    let mercadoPagoTotal = 0;
-    let totalIngresos = 0;
-    let totalEgresos = 0;
-
-    let dolaresEfectivoTotal = 0;
-    let dolaresIngresos = 0;
-    let dolaresEgresos = 0;
-
-    for (const item of list) {
-      const amount = parseFloat(item.amount);
-      const isUSD = item.currency === "USD";
-
-      if (isUSD) {
-        if (item.type === "ingreso") {
-          dolaresIngresos += amount;
-          dolaresEfectivoTotal += amount;
-        } else {
-          dolaresEgresos += amount;
-          dolaresEfectivoTotal -= amount;
-        }
-      } else {
-        if (item.type === "ingreso") {
-          totalIngresos += amount;
-          if (item.paymentMethod === "efectivo") efectivoTotal += amount;
-          else mercadoPagoTotal += amount;
-        } else {
-          totalEgresos += amount;
-          if (item.paymentMethod === "efectivo") efectivoTotal -= amount;
-          else mercadoPagoTotal -= amount;
-        }
-      }
-    }
+    const summary = calculateCashSummary(list);
 
     return {
       success: true,
       data: {
         movements: list,
-        efectivoTotal,
-        mercadoPagoTotal,
-        totalBalance: efectivoTotal + mercadoPagoTotal,
-        totalIngresos,
-        totalEgresos,
-        dolaresEfectivoTotal,
-        dolaresIngresos,
-        dolaresEgresos,
+        ...summary,
       },
     };
   } catch (error: any) {
@@ -229,21 +190,8 @@ export async function setInitialCashBalances(data: {
     await db.transaction(async (tx) => {
       // 1. Calcular balance actual dentro de la transacción
       const list = await tx.select().from(cashMovements);
-      let efectivoTotal = 0;
-      let mercadoPagoTotal = 0;
-      let dolaresEfectivoTotal = 0;
-
-      for (const item of list) {
-        const amount = parseFloat(item.amount);
-        const factor = item.type === "ingreso" ? 1 : -1;
-        if (item.currency === "USD") {
-          dolaresEfectivoTotal += factor * amount;
-        } else if (item.paymentMethod === "efectivo") {
-          efectivoTotal += factor * amount;
-        } else {
-          mercadoPagoTotal += factor * amount;
-        }
-      }
+      const { efectivoTotal, mercadoPagoTotal, dolaresEfectivoTotal } =
+        calculateCashSummary(list);
 
       const diffCash = Math.round(Number(data.targetCashPesos)) - Math.round(efectivoTotal);
       const diffMP = Math.round(Number(data.targetMercadoPago)) - Math.round(mercadoPagoTotal);

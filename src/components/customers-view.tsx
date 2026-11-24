@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { formatCurrency, generateWhatsAppLink } from "@/lib/utils";
+import { formatCurrency, generateWhatsAppLink, getArgentinaTodayStr } from "@/lib/utils";
+import { downloadCsv } from "@/lib/csv";
 import { Modal } from "./ui/modal";
 import { Pagination } from "./ui/pagination";
 import { createCustomer, updateCustomer, deleteCustomer } from "@/actions/customers";
@@ -13,6 +14,7 @@ import {
   MapPin,
   Edit2,
   Trash2,
+  Download,
 } from "lucide-react";
 
 interface CustomersViewProps {
@@ -128,6 +130,32 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  const handleExportCsv = () => {
+    const headers = [
+      "Nombre",
+      "Apellido",
+      "Teléfono",
+      "Dirección",
+      "Estado",
+      "Créditos Activos",
+      "Deuda ARS",
+      "Deuda USD",
+      "Cuotas Vencidas",
+    ];
+    const rows = filtered.map((c) => [
+      c.name,
+      c.lastName || "",
+      c.phone || "",
+      c.address || "",
+      c.scoreLabel || c.score || "",
+      c.activeCreditsCount ?? 0,
+      c.totalDebtArs ?? c.totalDebt ?? 0,
+      c.totalDebtUsd ?? 0,
+      c.overdueCount ?? 0,
+    ]);
+    downloadCsv(`clientes-${getArgentinaTodayStr()}.csv`, headers, rows);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* HEADER */}
@@ -141,13 +169,25 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
           </p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition self-start sm:self-auto cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" />
-          + Agregar Comprador
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white dark:bg-[#1E293B] hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] border border-[#E5E7EB] dark:border-[#334155] font-bold text-xs shadow-xs disabled:opacity-50 transition cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Exportar CSV
+          </button>
+
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            + Agregar Comprador
+          </button>
+        </div>
       </div>
 
       {/* BUSCADOR Y FILTROS POR CONFIANZA */}

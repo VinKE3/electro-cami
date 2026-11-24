@@ -9,33 +9,17 @@ import {
   customers,
   products,
 } from "@/db/schema";
-import { eq, desc, asc, and, lte, gte, sql, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, lte, gte, sql, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getArgentinaTodayStr, getArgentinaDateOffsetStr } from "@/lib/utils";
 import { requireSession } from "@/lib/auth";
-
-// Función para calcular fecha de vencimiento según frecuencia
-function calculateDueDate(startDateStr: string, index: number, frequency: string, frequencyDays: number): string {
-  // Parsing date string safely (YYYY-MM-DD)
-  const [year, month, day] = startDateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-
-  if (frequency === "semanal") {
-    date.setUTCDate(date.getUTCDate() + (index + 1) * 7);
-  } else if (frequency === "quincenal") {
-    date.setUTCDate(date.getUTCDate() + (index + 1) * 14);
-  } else if (frequency === "mensual") {
-    date.setUTCMonth(date.getUTCMonth() + (index + 1));
-  } else {
-    // Frecuencia personalizada en días
-    date.setUTCDate(date.getUTCDate() + (index + 1) * (frequencyDays || 7));
-  }
-
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+import {
+  calculateCreditPlan,
+  calculateDueDate,
+  replayInstallmentPayments,
+  calculateCashSummary,
+  calculateMonthlyProfitSummary,
+} from "@/lib/finance";
 
 export async function createCredit(formData: {
   customerId: number;
@@ -65,12 +49,17 @@ export async function createCredit(formData: {
     if (count <= 0) throw new Error("La cantidad de cuotas debe ser al menos 1.");
 
     // Cálculo: Precio con interés y ajuste exacto en última cuota
-    const interestMultiplier = 1 + interest / 100;
-    const totalFinanced = Math.round(base * interestMultiplier);
-    const remainingToFinance = Math.max(0, totalFinanced - downPayment);
-    const baseInstallmentAmount = Math.floor(remainingToFinance / count);
-    const lastInstallmentAmount =
-      remainingToFinance - baseInstallmentAmount * (count - 1);
+    const {
+      totalFinanced,
+      remainingToFinance,
+      baseInstallmentAmount,
+      installmentAmounts,
+    } = calculateCreditPlan({
+      baseAmount: base,
+      interestRate: interest,
+      downPayment,
+      installmentCount: count,
+    });
 
     // 1..4 Ejecutar creación de crédito, cuotas, seña y descuento de stock de forma atómica
     const newCredit = await db.transaction(async (tx) => {
@@ -98,26 +87,19 @@ export async function createCredit(formData: {
         })
         .returning();
 
-      const installmentsToInsert = [];
-      for (let i = 0; i < count; i++) {
-        const dueDate = calculateDueDate(
+      const installmentsToInsert = installmentAmounts.map((amountForThisInstallment, i) => ({
+        creditId: createdCredit.id,
+        installmentNumber: i + 1,
+        amount: amountForThisInstallment.toString(),
+        paidAmount: "0",
+        dueDate: calculateDueDate(
           formData.startDate,
           i,
           formData.frequency,
           formData.frequencyDays || 7
-        );
-        const amountForThisInstallment =
-          i === count - 1 ? lastInstallmentAmount : baseInstallmentAmount;
-
-        installmentsToInsert.push({
-          creditId: createdCredit.id,
-          installmentNumber: i + 1,
-          amount: amountForThisInstallment.toString(),
-          paidAmount: "0",
-          dueDate: dueDate,
-          status: "pendiente",
-        });
-      }
+        ),
+        status: "pendiente",
+      }));
 
       if (installmentsToInsert.length > 0) {
         await tx.insert(installments).values(installmentsToInsert);
@@ -458,27 +440,25 @@ export async function getDashboardOverview() {
       (i) => i.dueDate > todayStr && i.dueDate <= nextWeekStr
     );
 
-    // 3. Totales en caja
+    // 3. Totales en caja y rendimiento del mes
     const allCashMovements = await db.select().from(cashMovements);
-    let cashInHand = 0;
-    let mercadoPagoBalance = 0;
-    let dolaresEfectivoTotal = 0;
+    const cashSummary = calculateCashSummary(allCashMovements);
 
-    for (const mov of allCashMovements) {
-      const amount = parseFloat(mov.amount);
-      const isIngreso = mov.type === "ingreso";
-      const factor = isIngreso ? 1 : -1;
+    const nonCancelledCredits = await db
+      .select({
+        startDate: credits.startDate,
+        status: credits.status,
+        currency: credits.currency,
+        totalAmount: credits.totalAmount,
+        costAmount: credits.costAmount,
+      })
+      .from(credits)
+      .where(ne(credits.status, "cancelado"));
 
-      if (mov.currency === "USD") {
-        dolaresEfectivoTotal += factor * amount;
-      } else {
-        if (mov.paymentMethod === "efectivo") {
-          cashInHand += factor * amount;
-        } else {
-          mercadoPagoBalance += factor * amount;
-        }
-      }
-    }
+    const monthlyProfit = calculateMonthlyProfitSummary(
+      nonCancelledCredits,
+      todayStr.slice(0, 7)
+    );
 
     return {
       success: true,
@@ -486,12 +466,13 @@ export async function getDashboardOverview() {
         activeCreditsCount: allCredits.length,
         totalInTheStreet: totalInTheStreetArs,
         totalInTheStreetUsd,
-        cashInHand: Math.max(0, cashInHand),
-        mercadoPagoBalance: Math.max(0, mercadoPagoBalance),
-        dolaresEfectivoTotal: Math.max(0, dolaresEfectivoTotal),
+        cashInHand: Math.max(0, cashSummary.efectivoTotal),
+        mercadoPagoBalance: Math.max(0, cashSummary.mercadoPagoTotal),
+        dolaresEfectivoTotal: Math.max(0, cashSummary.dolaresEfectivoTotal),
         overdue,
         dueToday,
         upcomingThisWeek,
+        monthlyProfit,
       },
     };
   } catch (error: any) {
@@ -578,47 +559,22 @@ export async function revertPayment(paymentId: number) {
         (p) => p.notes !== "Entrega inicial / Seña" && !downPaymentIds.has(p.id)
       );
 
-      const paidMap = new Map<number, number>();
-      for (const inst of credit.installments) {
-        paidMap.set(inst.id, 0);
-      }
+      const replayed = replayInstallmentPayments(
+        credit.installments,
+        remainingNonDownPayments
+      );
+      const originalInstMap = new Map(credit.installments.map((inst) => [inst.id, inst]));
 
-      for (const p of remainingNonDownPayments) {
-        const amt = parseFloat(p.amount || "0");
-        if (amt <= 0) continue;
-
-        if (p.installmentId && paidMap.has(p.installmentId)) {
-          paidMap.set(p.installmentId, (paidMap.get(p.installmentId) ?? 0) + amt);
-        } else {
-          let remainingToApply = amt;
-          for (const inst of credit.installments) {
-            if (remainingToApply <= 0) break;
-            const instAmount = parseFloat(inst.amount || "0");
-            const currentPaid = paidMap.get(inst.id) ?? 0;
-            const instDue = instAmount - currentPaid;
-            if (instDue > 0) {
-              const applied = Math.min(remainingToApply, instDue);
-              paidMap.set(inst.id, currentPaid + applied);
-              remainingToApply -= applied;
-            }
-          }
-        }
-      }
-
-      for (const inst of credit.installments) {
-        const paid = paidMap.get(inst.id) ?? 0;
-        const instAmount = parseFloat(inst.amount || "0");
-        const newStatus =
-          paid >= instAmount ? "pagada" : paid > 0 ? "parcial" : "pendiente";
-
+      for (const state of replayed) {
+        const inst = originalInstMap.get(state.id);
         await tx
           .update(installments)
           .set({
-            paidAmount: paid.toString(),
-            status: newStatus,
-            paidAt: newStatus === "pagada" ? (inst.paidAt ?? new Date()) : null,
+            paidAmount: state.paidAmount.toString(),
+            status: state.status,
+            paidAt: state.status === "pagada" ? (inst?.paidAt ?? new Date()) : null,
           })
-          .where(eq(installments.id, inst.id));
+          .where(eq(installments.id, state.id));
       }
 
       const totalInstallmentPayments = remainingNonDownPayments.reduce(

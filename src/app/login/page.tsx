@@ -24,7 +24,12 @@ export default function LoginPage() {
     try {
       const res = await login({ username, password });
       if (res.success) {
-        router.push("/admin");
+        const fromParam = new URLSearchParams(window.location.search).get("from");
+        const safeTarget =
+          fromParam && fromParam.startsWith("/admin") && !fromParam.startsWith("//")
+            ? fromParam
+            : "/admin";
+        router.push(safeTarget);
         router.refresh();
       } else {
         setError(res.error || "Credenciales incorrectas.");

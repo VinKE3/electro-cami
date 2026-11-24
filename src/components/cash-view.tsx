@@ -12,6 +12,7 @@ import {
 } from "@/lib/utils";
 import { Modal } from "./ui/modal";
 import { Pagination } from "./ui/pagination";
+import { downloadCsv } from "@/lib/csv";
 import {
   createCashMovement,
   deleteCashMovement,
@@ -44,6 +45,7 @@ import {
   AlertTriangle,
   FileText,
   Coins,
+  Download,
 } from "lucide-react";
 
 interface CashViewProps {
@@ -433,6 +435,28 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
     }
   };
 
+  const handleExportCsv = () => {
+    const headers = [
+      "Fecha",
+      "Tipo",
+      "Categoría",
+      "Método",
+      "Moneda",
+      "Monto",
+      "Descripción",
+    ];
+    const rows = displayedMovements.map((m) => [
+      formatDateTime(m.date),
+      m.type === "ingreso" ? "Ingreso" : "Egreso",
+      getCategoryDetails(m.category).label,
+      m.paymentMethod,
+      m.currency || "ARS",
+      parseFloat(m.amount || "0"),
+      m.description,
+    ]);
+    downloadCsv(`caja-${periodFilter}-${todayStr}.csv`, headers, rows);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* HEADER */}
@@ -447,6 +471,17 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
         </div>
 
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={displayedMovements.length === 0}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-white dark:bg-[#1E293B] hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] border border-[#E5E7EB] dark:border-[#334155] font-bold text-xs shadow-xs disabled:opacity-50 transition cursor-pointer text-center"
+            title="Exportar movimientos visibles a CSV para Excel"
+          >
+            <Download className="w-4 h-4 shrink-0" />
+            <span className="truncate">Exportar CSV</span>
+          </button>
+
           <button
             type="button"
             onClick={openInitBalanceModal}
