@@ -181,7 +181,7 @@ export function AdminMobileNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg text-[9px] font-medium transition text-center ${
+              className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg text-[9px] font-medium transition text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
                 isActive
                   ? "text-blue-600 dark:text-blue-400 font-bold"
                   : "text-[#64748B] hover:text-[#1E293B] dark:text-[#94A3B8] dark:hover:text-[#F8FAFC]"
@@ -364,8 +364,24 @@ export function AdminMobileNav() {
   );
 }
 
+const headerTitles: Record<string, string> = {
+  "/admin": "Inicio — Panel de Control y Cobranzas",
+  "/admin/creditos": "Ventas en Cuotas & Créditos",
+  "/admin/clientes": "Directorio de Clientes",
+  "/admin/caja": "Control de Caja & Movimientos",
+  "/admin/productos": "Inventario & Productos",
+  "/admin/proveedores": "Proveedores & Reposición",
+  "/admin/usuarios": "Usuarios & Seguridad",
+};
+
 export function AdminHeader() {
+  const pathname = usePathname();
   const [isCalculatorOpen, setIsCalculatorOpen] = React.useState(false);
+
+  const currentSectionTitle =
+    Object.entries(headerTitles).find(([route]) =>
+      route === "/admin" ? pathname === "/admin" : pathname.startsWith(route)
+    )?.[1] ?? "Panel de Control y Cobranzas";
 
   return (
     <header className="h-16 border-b border-[#E5E7EB] dark:border-[#334155] bg-white/80 dark:bg-[#1E293B]/80 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200 w-full max-w-full overflow-hidden">
@@ -380,7 +396,7 @@ export function AdminHeader() {
 
       <div className="hidden md:block">
         <p className="text-xs font-semibold text-[#64748B] dark:text-[#94A3B8]">
-          Panel de Control y Cobranzas
+          {currentSectionTitle}
         </p>
       </div>
 
@@ -389,7 +405,7 @@ export function AdminHeader() {
         <button
           type="button"
           onClick={() => setIsCalculatorOpen(true)}
-          className="inline-flex items-center justify-center gap-1 p-2 sm:px-3 sm:py-1.5 text-xs font-bold rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer shadow-2xs shrink-0"
+          className="inline-flex items-center justify-center gap-1 p-2 sm:px-3 sm:py-1.5 text-xs font-bold rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer shadow-2xs shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
           title="Simular cuotas al instante"
         >
           <Calculator className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -400,7 +416,7 @@ export function AdminHeader() {
 
         <Link
           href="/catalogo"
-          className="inline-flex items-center justify-center gap-1 p-2 sm:px-3 sm:py-1.5 text-xs font-bold rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition shrink-0"
+          className="inline-flex items-center justify-center gap-1 p-2 sm:px-3 sm:py-1.5 text-xs font-bold rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           title="Ver Catálogo Público"
         >
           <Store className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />

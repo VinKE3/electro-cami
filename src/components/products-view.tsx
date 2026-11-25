@@ -243,8 +243,14 @@ export function ProductsView({
         });
 
         if (res.success && res.data) {
+          const matchedSupplier =
+            suppliers.find((s) => s.id === res.data!.supplierId) || null;
           setProducts(
-            products.map((p) => (p.id === editingProduct.id ? { ...p, ...res.data } : p))
+            products.map((p) =>
+              p.id === editingProduct.id
+                ? { ...p, ...res.data, supplier: matchedSupplier }
+                : p
+            )
           );
           setIsModalOpen(false);
         } else {
@@ -270,7 +276,9 @@ export function ProductsView({
         });
 
         if (res.success && res.data) {
-          setProducts([res.data, ...products]);
+          const matchedSupplier =
+            suppliers.find((s) => s.id === res.data!.supplierId) || null;
+          setProducts([{ ...res.data, supplier: matchedSupplier }, ...products]);
           setIsModalOpen(false);
         } else {
           alert(res.error || "Error al crear");
@@ -295,6 +303,7 @@ export function ProductsView({
 
   const urgentCount = products.filter((p) => Number(p.stock) <= 1).length;
   const agotadosCount = products.filter((p) => Number(p.stock) <= 0).length;
+  const inStockCount = products.filter((p) => Number(p.stock) > 1).length;
 
   const filtered = products.filter((p) => {
     const matchesCat = filterCategory === "todas" ? true : p.category === filterCategory;
@@ -410,12 +419,12 @@ export function ProductsView({
         </div>
 
         {/* PESTAÑAS DE NIVEL DE STOCK / REPOSICIÓN URGENTE */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full text-xs font-bold">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full text-xs font-bold scrollbar-none">
           {[
-            { id: "todos", label: "Todos los productos" },
+            { id: "todos", label: `Todos los productos (${products.length})` },
             { id: "urgente", label: `⚠️ Reposición Urgente (${urgentCount})`, highlight: urgentCount > 0 },
             { id: "agotados", label: `🔴 Agotados (${agotadosCount})` },
-            { id: "con_stock", label: "🟢 En Stock" },
+            { id: "con_stock", label: `🟢 En Stock (${inStockCount})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -549,9 +558,25 @@ export function ProductsView({
                       </div>
 
                       <div className="flex justify-between items-center text-[11px] pt-1 border-t border-[#E5E7EB] dark:border-[#334155]">
-                        <span className="text-blue-600 dark:text-blue-400 font-semibold">Ganancia estimada:</span>
-                        <span className="text-blue-600 dark:text-blue-400 font-bold">
-                          +{formatCurrency(profit, prod.currency || "ARS")}
+                        <span
+                          className={`font-semibold ${
+                            profit < 0
+                              ? "text-rose-600 dark:text-rose-400"
+                              : "text-blue-600 dark:text-blue-400"
+                          }`}
+                        >
+                          Ganancia estimada:
+                        </span>
+                        <span
+                          className={`font-bold ${
+                            profit < 0
+                              ? "text-rose-600 dark:text-rose-400"
+                              : "text-blue-600 dark:text-blue-400"
+                          }`}
+                        >
+                          {profit > 0 ? "+" : ""}
+                          {formatCurrency(profit, prod.currency || "ARS")}
+                          {cost > 0 ? ` (${Math.round((profit / cost) * 100)}%)` : ""}
                         </span>
                       </div>
                     </div>
@@ -593,15 +618,15 @@ export function ProductsView({
                 </div>
 
                 {/* Footer Acciones */}
-                <div className="p-4 pt-0 flex items-center justify-between border-t border-[#E5E7EB] dark:border-[#334155]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[#94A3B8]">
+                <div className="px-4 py-3 flex items-center justify-between gap-2 border-t border-[#E5E7EB] dark:border-[#334155]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] text-[#94A3B8] truncate">
                       {prod.supplier ? `Prov: ${prod.supplier.name}` : "Sin prov."}
                     </span>
                     <button
                       type="button"
                       onClick={() => openPurchaseModal(prod)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition cursor-pointer shrink-0"
                       title="Registrar compra o reposición de stock para este producto"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -609,7 +634,7 @@ export function ProductsView({
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => openEditModal(prod)}
                       className="p-1.5 text-[#64748B] hover:text-[#1E293B] dark:text-[#94A3B8] dark:hover:text-[#F8FAFC] rounded-lg hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] transition cursor-pointer"

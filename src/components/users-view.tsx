@@ -177,7 +177,7 @@ export function UsersView({
         {isCurrentUserAdmin && (
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition self-start sm:self-auto cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition self-start sm:self-auto cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           >
             <UserPlus className="w-4 h-4" />
             Crear Usuario
@@ -198,7 +198,9 @@ export function UsersView({
             return (
               <div
                 key={u.id}
-                className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between gap-4 transition hover:border-blue-400/40"
+                className={`bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between gap-4 transition hover:border-blue-400/40 ${
+                  !isActive ? "opacity-75" : ""
+                }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">

@@ -132,6 +132,25 @@ export function CreditsView({
     });
   };
 
+  const statusCounts = React.useMemo(() => {
+    let activo = 0;
+    let finalizado = 0;
+    let cancelado = 0;
+    for (const c of initialCredits) {
+      if (c.status === "activo") activo++;
+      else if (c.status === "finalizado") finalizado++;
+      else if (c.status === "cancelado") cancelado++;
+    }
+    return {
+      activo,
+      finalizado,
+      cancelado,
+      todos: initialCredits.length,
+    };
+  }, [initialCredits]);
+
+  const todayStr = getArgentinaTodayStr();
+
   const filteredCredits = initialCredits.filter((cred) => {
     const matchesStatus =
       filterStatus === "todos" ? true : cred.status === filterStatus;
@@ -265,10 +284,10 @@ export function CreditsView({
 
         <div className="flex gap-1.5 bg-[#E5E7EB]/60 dark:bg-[#0F172A] p-1 rounded-xl self-start border border-[#E5E7EB] dark:border-[#334155] overflow-x-auto max-w-full scrollbar-none">
           {[
-            { id: "activo", label: "Activos" },
-            { id: "finalizado", label: "Finalizados" },
-            { id: "cancelado", label: "Cancelados" },
-            { id: "todos", label: "Todos" },
+            { id: "activo", label: `Activos (${statusCounts.activo})` },
+            { id: "finalizado", label: `Finalizados (${statusCounts.finalizado})` },
+            { id: "cancelado", label: `Cancelados (${statusCounts.cancelado})` },
+            { id: "todos", label: `Todos (${statusCounts.todos})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -310,6 +329,12 @@ export function CreditsView({
             const paidInstCount = cred.installments.filter(
               (i: any) => i.status === "pagada"
             ).length;
+            const overdueInstCount =
+              cred.status === "activo"
+                ? cred.installments.filter(
+                    (i: any) => i.status !== "pagada" && i.dueDate < todayStr
+                  ).length
+                : 0;
 
             return (
               <div
@@ -366,6 +391,13 @@ export function CreditsView({
                           🇺🇸 Dólares (USD)
                         </span>
                       )}
+
+                      {overdueInstCount > 0 && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                          ⚠️ {overdueInstCount}{" "}
+                          {overdueInstCount === 1 ? "cuota vencida" : "cuotas vencidas"}
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-xs font-semibold text-[#1E293B] dark:text-[#F8FAFC]">
@@ -415,10 +447,11 @@ export function CreditsView({
                         onClick={() =>
                           setExpandedCreditId(isExpanded ? null : cred.id)
                         }
-                        className="p-2 rounded-xl border border-[#E5E7EB] dark:border-[#334155] hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        className="px-2.5 py-2 rounded-xl border border-[#E5E7EB] dark:border-[#334155] hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] text-[#1E293B] dark:text-[#F8FAFC] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title="Ver detalle de cuotas y pagos"
                       >
                         <span className="text-[11px]">
-                          {paidInstCount}/{cred.installmentCount}
+                          {paidInstCount}/{cred.installmentCount} cuotas
                         </span>
                         {isExpanded ? (
                           <ChevronUp className="w-4 h-4" />

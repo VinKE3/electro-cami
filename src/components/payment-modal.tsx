@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "./ui/modal";
 import { WhatsAppModal } from "./whatsapp-modal";
 import { registerPayment } from "@/actions/credits";
@@ -37,6 +38,7 @@ export function PaymentModal({
   installmentNumber,
   onSuccess,
 }: PaymentModalProps) {
+  const router = useRouter();
   const isUSD = currency === "USD";
   const [amount, setAmount] = useState(suggestedAmount > 0 ? suggestedAmount : remainingAmount);
   const [payModeUSD, setPayModeUSD] = useState<"USD" | "ARS">("USD");
@@ -99,6 +101,7 @@ export function PaymentModal({
 
       if (res.success && res.data) {
         setReceiptData(res.data);
+        router.refresh();
         if (onSuccess) onSuccess();
       } else {
         alert(res.error || "Ocurrió un error al registrar el pago.");
@@ -188,7 +191,11 @@ export function PaymentModal({
                         receiptData.amount,
                         receiptData.currency
                       )} por "${receiptData.concept}" mediante ${
-                        receiptData.paymentMethod === "efectivo" ? "Efectivo" : "Mercado Pago"
+                        receiptData.paymentMethod === "efectivo"
+                          ? "Efectivo"
+                          : receiptData.paymentMethod === "transferencia"
+                            ? "Transferencia"
+                            : "Mercado Pago"
                       }.\n\nTu saldo restante actual es de: ${formatCurrency(
                         receiptData.newRemaining,
                         receiptData.currency

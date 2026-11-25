@@ -324,6 +324,7 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
 
       if (res.success && res.data) {
         setIsModalOpen(false);
+        router.refresh();
       } else {
         alert(res.error || "Error al registrar movimiento.");
       }
@@ -529,79 +530,55 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
       {/* METRICAS GLOBALES ACUMULADAS (4 CAJAS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Efectivo en Mano Acumulado */}
-        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs relative">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Efectivo Físico en Mano</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={openInitBalanceModal}
-                className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 px-2 py-0.5 rounded-md transition cursor-pointer"
-                title="Ajustar saldo inicial de efectivo"
-              >
-                Editar
-              </button>
+        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Efectivo Físico en Mano</span>
               <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
                 <Banknote className="w-4 h-4" />
               </div>
             </div>
+            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(data.efectivoTotal)}
+            </div>
           </div>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-            {formatCurrency(data.efectivoTotal)}
-          </div>
-          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1.5">
             Billetes físicos netos en bolsillo/caja
           </p>
         </div>
 
         {/* 2. Mercado Pago Acumulado */}
-        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs relative">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Mercado Pago / Banco</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={openInitBalanceModal}
-                className="text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/80 px-2 py-0.5 rounded-md transition cursor-pointer"
-                title="Ajustar saldo inicial de Mercado Pago"
-              >
-                Editar
-              </button>
+        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Mercado Pago / Banco</span>
               <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 flex items-center justify-center">
                 <CreditCard className="w-4 h-4" />
               </div>
             </div>
+            <div className="text-2xl font-black text-sky-600 dark:text-sky-400">
+              {formatCurrency(data.mercadoPagoTotal)}
+            </div>
           </div>
-          <div className="text-2xl font-black text-sky-600 dark:text-sky-400">
-            {formatCurrency(data.mercadoPagoTotal)}
-          </div>
-          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1.5">
             Dinero acreditado en cuenta digital
           </p>
         </div>
 
         {/* 3. Dólares Billete Físicos Acumulados */}
-        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-xs relative bg-amber-50/20 dark:bg-amber-950/10">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Dólares Billete (USD)</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={openInitBalanceModal}
-                className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100/70 dark:bg-amber-950/60 hover:bg-amber-200/80 dark:hover:bg-amber-900/80 px-2 py-0.5 rounded-md transition cursor-pointer"
-                title="Ajustar saldo inicial de dólares"
-              >
-                Editar
-              </button>
+        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-xs bg-amber-50/20 dark:bg-amber-950/10 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Dólares Billete (USD)</span>
               <div className="w-8 h-8 rounded-xl bg-amber-100/70 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center">
                 <span className="text-sm font-bold">💵</span>
               </div>
             </div>
+            <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
+              US$ {(data.dolaresEfectivoTotal || 0).toLocaleString("es-AR")}
+            </div>
           </div>
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
-            US$ {(data.dolaresEfectivoTotal || 0).toLocaleString("es-AR")}
-          </div>
-          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1.5">
             {dolarRate && (data.dolaresEfectivoTotal || 0) > 0 ? (
               <span>≈ {formatCurrency((data.dolaresEfectivoTotal || 0) * (dolarRate.compra || dolarRate.venta), "ARS")} (Blue)</span>
             ) : (
@@ -611,27 +588,19 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
         </div>
 
         {/* 4. Total Disponible Acumulado (Pesos) */}
-        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs relative">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Total Disponible (Pesos)</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={openInitBalanceModal}
-                className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 px-2 py-0.5 rounded-md transition cursor-pointer"
-                title="Configurar fondos de caja"
-              >
-                Ajustar
-              </button>
+        <div className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Total Disponible (Pesos)</span>
               <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center">
                 <Wallet className="w-4 h-4" />
               </div>
             </div>
+            <div className="text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC]">
+              {formatCurrency(data.totalBalance)}
+            </div>
           </div>
-          <div className="text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC]">
-            {formatCurrency(data.totalBalance)}
-          </div>
-          <div className="flex items-center gap-2 text-[11px] mt-1">
+          <div className="flex items-center gap-2 text-[11px] mt-1.5">
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
               +{formatCurrency(data.totalIngresos)}
             </span>
@@ -661,7 +630,7 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
             </p>
           </div>
 
-          <div className="flex items-center gap-1 bg-[#F4F6F9] dark:bg-[#0F172A] p-1 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] text-xs font-bold self-start sm:self-auto overflow-x-auto max-w-full">
+          <div className="flex items-center gap-1 bg-[#F4F6F9] dark:bg-[#0F172A] p-1 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] text-xs font-bold self-start sm:self-auto overflow-x-auto max-w-full scrollbar-none">
             {[
               { id: "hoy", label: "Hoy" },
               { id: "semana", label: "Esta Semana" },
@@ -674,7 +643,7 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
                   setPeriodFilter(p.id as any);
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer ${
                   periodFilter === p.id
                     ? "bg-blue-600 text-white shadow-xs"
                     : "text-[#64748B] dark:text-[#94A3B8] hover:text-[#1E293B] dark:hover:text-[#F8FAFC]"
@@ -722,7 +691,7 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
               </span>
               {periodStats.efectivoNeto !== 0 && (
                 <span
-                  className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
+                  className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
                     periodStats.efectivoNeto > 0
                       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                       : "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200"
@@ -820,7 +789,11 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
               <button
                 type="button"
                 onClick={() => {
-                  setExchangeUsdAmount(periodStats.dolaresNeto > 0 ? periodStats.dolaresNeto : 0);
+                  setExchangeUsdAmount(
+                    periodStats.dolaresNeto > 0
+                      ? periodStats.dolaresNeto
+                      : Math.max(0, data.dolaresEfectivoTotal || 0)
+                  );
                   if (dolarRate) setExchangeRateCustom(dolarRate.compra);
                   setIsExchangeModalOpen(true);
                 }}
@@ -938,16 +911,40 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
         {/* Lista de Movimientos */}
         <div className="divide-y divide-[#E5E7EB] dark:divide-[#334155]">
           {displayedMovements.length === 0 ? (
-            <div className="p-12 text-center text-[#94A3B8] space-y-2">
+            <div className="p-12 text-center text-[#94A3B8] space-y-2.5">
               <Wallet className="w-10 h-10 mx-auto opacity-40 mb-2" />
               <p className="font-semibold text-sm text-[#1E293B] dark:text-[#F8FAFC]">
                 No hay movimientos registrados para este período
               </p>
               <p className="text-xs">
                 {periodFilter === "hoy"
-                  ? "Aún no se han registrado cobros o gastos hoy. Puedes cambiar a 'Esta Semana' o 'Histórico'."
+                  ? "Aún no se han registrado cobros o gastos hoy. Puedes cambiar el período para ver movimientos anteriores."
                   : "No se encontraron movimientos con los filtros seleccionados."}
               </p>
+              {periodFilter === "hoy" && data.movements.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPeriodFilter("semana");
+                      setCurrentPage(1);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-bold text-xs border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
+                  >
+                    Ver Esta Semana
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPeriodFilter("todos");
+                      setCurrentPage(1);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition cursor-pointer"
+                  >
+                    Ver Todo el Histórico
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             paginatedMovements.map((mov) => {

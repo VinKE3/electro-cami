@@ -122,6 +122,23 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
     }
   };
 
+  const scoreCounts = React.useMemo(() => {
+    let confiable = 0;
+    let regular = 0;
+    let moroso = 0;
+    for (const c of customers) {
+      if (c.score === "confiable") confiable++;
+      else if (c.score === "moroso") moroso++;
+      else regular++;
+    }
+    return {
+      todos: customers.length,
+      confiable,
+      regular,
+      moroso,
+    };
+  }, [customers]);
+
   const filtered = customers.filter((c) => {
     const q = search.toLowerCase();
     const fullName = `${c.name} ${c.lastName || ""}`.toLowerCase();
@@ -168,7 +185,7 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
             Directorio de Clientes / Compradores
           </h2>
           <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
-            Administra a tus clientes, números de WhatsApp y consulta sus saldos deudores.
+            Administra tus clientes, consulta saldos y haz clic en cualquier fila para ver su historial completo.
           </p>
         </div>
 
@@ -210,12 +227,12 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
         </div>
 
         {/* Semáforo de Pagador Pills */}
-        <div className="flex items-center gap-1.5 bg-[#E5E7EB]/60 dark:bg-[#0F172A] p-1 rounded-xl self-start border border-[#E5E7EB] dark:border-[#334155] text-xs font-bold overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1.5 bg-[#E5E7EB]/60 dark:bg-[#0F172A] p-1 rounded-xl self-start border border-[#E5E7EB] dark:border-[#334155] text-xs font-bold overflow-x-auto max-w-full scrollbar-none">
           {[
-            { id: "todos", label: "Todos" },
-            { id: "confiable", label: "🟢 Confiables" },
-            { id: "regular", label: "🟡 Al día / Nuevos" },
-            { id: "moroso", label: "🔴 Morosos" },
+            { id: "todos", label: `Todos (${scoreCounts.todos})` },
+            { id: "confiable", label: `🟢 Confiables (${scoreCounts.confiable})` },
+            { id: "regular", label: `🟡 Al día / Nuevos (${scoreCounts.regular})` },
+            { id: "moroso", label: `🔴 Morosos (${scoreCounts.moroso})` },
           ].map((tab) => (
             <button
               key={tab.id}

@@ -132,7 +132,7 @@ export function SuppliersView({ initialSuppliers }: SuppliersViewProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC]">
-            Módulo de Proveedores
+            Módulo de Proveedores ({suppliers.length})
           </h2>
           <p className="text-xs text-[#64748B] dark:text-[#94A3B8]">
             Personas o distribuidoras a quienes les compras mercadería para revender.
@@ -184,8 +184,8 @@ export function SuppliersView({ initialSuppliers }: SuppliersViewProps) {
                       {s.name}
                     </h3>
                     {s.category && (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mt-0.5 block">
-                        Rubro: {s.category}
+                      <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 mt-1">
+                        {s.category}
                       </span>
                     )}
                   </div>
@@ -214,18 +214,6 @@ export function SuppliersView({ initialSuppliers }: SuppliersViewProps) {
                       <span className="font-mono text-[#1E293B] dark:text-[#F8FAFC] font-semibold">
                         {s.phone}
                       </span>
-                      <a
-                        href={generateWhatsAppLink(
-                          s.phone,
-                          `Hola ${s.name}! Te escribo de Electro Cami para consultar disponibilidad de mercadería.`
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:underline"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        WhatsApp
-                      </a>
                     </div>
                   ) : (
                     <p className="text-[#94A3B8] italic text-[11px]">Sin teléfono</p>
@@ -260,17 +248,31 @@ export function SuppliersView({ initialSuppliers }: SuppliersViewProps) {
 
                 {s.products && s.products.length > 0 ? (
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    {s.products.map((p: any) => (
+                    {s.products.map((p: any) => {
+                      const isLowStock = (p.stock ?? 0) <= 1;
+                      return (
                       <div
                         key={p.id}
-                        className="bg-[#F4F6F9] dark:bg-[#0F172A] p-2 rounded-xl text-[11px] flex justify-between items-center border border-slate-200/60 dark:border-slate-800"
+                        className={`p-2 rounded-xl text-[11px] flex justify-between items-center border ${
+                          isLowStock
+                            ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
+                            : "bg-[#F4F6F9] dark:bg-[#0F172A] border-slate-200/60 dark:border-slate-800"
+                        }`}
                       >
                         <div className="truncate mr-2">
                           <span className="font-bold text-[#1E293B] dark:text-[#F8FAFC] block truncate">
                             {p.name}
                           </span>
-                          <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8]">
-                            Stock: {p.stock} u.
+                          <span
+                            className={`text-[10px] font-semibold ${
+                              (p.stock ?? 0) <= 0
+                                ? "text-rose-600 dark:text-rose-400"
+                                : isLowStock
+                                  ? "text-amber-700 dark:text-amber-400"
+                                  : "text-[#64748B] dark:text-[#94A3B8]"
+                            }`}
+                          >
+                            {(p.stock ?? 0) <= 0 ? "Agotado (0 u.)" : `Stock: ${p.stock} u.`}
                           </span>
                         </div>
                         <div className="text-right shrink-0">
@@ -280,7 +282,8 @@ export function SuppliersView({ initialSuppliers }: SuppliersViewProps) {
                           </span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-[11px] text-[#94A3B8] italic">
