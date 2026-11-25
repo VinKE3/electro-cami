@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { customers, credits, installments } from "@/db/schema";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { customers, credits, installments, payments } from "@/db/schema";
+import { eq, desc, asc, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getArgentinaTodayStr } from "@/lib/utils";
 import { requireSession } from "@/lib/auth";
@@ -124,14 +124,22 @@ export async function getCustomerById(id: number) {
       with: {
         credits: {
           with: {
-            installments: true,
-            payments: true,
+            installments: {
+              orderBy: [asc(installments.installmentNumber)],
+            },
+            payments: {
+              orderBy: [desc(payments.paymentDate)],
+            },
             product: true,
           },
           orderBy: [desc(credits.createdAt)],
         },
       },
     });
+
+    if (!customer) {
+      return { success: false, error: "Cliente no encontrado." };
+    }
 
     return { success: true, data: customer };
   } catch (error: any) {

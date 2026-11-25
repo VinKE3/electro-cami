@@ -5,6 +5,7 @@ import { formatCurrency, generateWhatsAppLink, getArgentinaTodayStr } from "@/li
 import { downloadCsv } from "@/lib/csv";
 import { Modal } from "./ui/modal";
 import { Pagination } from "./ui/pagination";
+import { CustomerHistoryModal } from "./customer-history-modal";
 import { createCustomer, updateCustomer, deleteCustomer } from "@/actions/customers";
 import {
   Users,
@@ -15,6 +16,7 @@ import {
   Edit2,
   Trash2,
   Download,
+  History,
 } from "lucide-react";
 
 interface CustomersViewProps {
@@ -29,6 +31,7 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
   const [pageSize, setPageSize] = useState(10);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
+  const [historyCustomer, setHistoryCustomer] = useState<any | null>(null);
 
   // Form states
   const [name, setName] = useState("");
@@ -232,156 +235,199 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
         </div>
       </div>
 
-      {/* GRILLA DE CLIENTES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* TABLA DE CLIENTES */}
+      <div className="bg-white dark:bg-[#1E293B] rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="col-span-full bg-white dark:bg-[#1E293B] rounded-2xl p-12 text-center border border-[#E5E7EB] dark:border-[#334155] text-[#94A3B8]">
+          <div className="p-12 text-center text-[#94A3B8]">
             <Users className="w-10 h-10 mx-auto opacity-40 mb-2" />
-            <p className="font-semibold text-sm text-[#1E293B] dark:text-[#F8FAFC]">No se encontraron clientes</p>
-            <p className="text-xs">Agrega a tus compradores para llevar un mejor control.</p>
+            <p className="font-semibold text-sm text-[#1E293B] dark:text-[#F8FAFC]">
+              No se encontraron clientes
+            </p>
+            <p className="text-xs">
+              Agrega a tus compradores para llevar un mejor control.
+            </p>
           </div>
         ) : (
-          paginated.map((c) => {
-            const debtArs = c.totalDebtArs ?? c.totalDebt ?? 0;
-            const debtUsd = c.totalDebtUsd ?? 0;
-            const hasDebt = debtArs > 0 || debtUsd > 0;
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F4F6F9] dark:bg-[#0F172A] border-b border-[#E5E7EB] dark:border-[#334155]">
+                <tr className="text-[10px] uppercase font-bold text-[#64748B] dark:text-[#94A3B8] tracking-wider">
+                  <th className="py-3 px-4">Cliente</th>
+                  <th className="py-3 px-4">WhatsApp</th>
+                  <th className="py-3 px-4">Estado</th>
+                  <th className="py-3 px-4">Créditos</th>
+                  <th className="py-3 px-4 text-right">Saldo Pendiente</th>
+                  <th className="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB] dark:divide-[#334155]">
+                {paginated.map((c) => {
+                  const debtArs = c.totalDebtArs ?? c.totalDebt ?? 0;
+                  const debtUsd = c.totalDebtUsd ?? 0;
+                  const hasDebt = debtArs > 0 || debtUsd > 0;
 
-            return (
-            <div
-              key={c.id}
-              className="bg-white dark:bg-[#1E293B] p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between gap-4 hover:border-blue-400/40 transition"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-black text-[#1E293B] dark:text-[#F8FAFC] text-base">
-                      {c.name} {c.lastName || ""}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                      {/* Semáforo de Confianza */}
-                      {c.score === "moroso" ? (
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1">
-                          🔴 Moroso ({c.overdueCount} {c.overdueCount === 1 ? "vencida" : "vencidas"})
-                        </span>
-                      ) : c.score === "confiable" ? (
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
-                          🟢 Confiable
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
-                          🟡 Al día / Nuevo
-                        </span>
-                      )}
-
-                      <span
-                        className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full inline-block ${
-                          hasDebt
-                            ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                            : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                        }`}
-                      >
-                        {hasDebt ? "Con crédito activo" : "Sin deuda"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openEditModal(c)}
-                      className="p-1.5 text-[#64748B] hover:text-[#1E293B] dark:text-[#94A3B8] dark:hover:text-[#F8FAFC] rounded-lg hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] transition cursor-pointer"
-                      title="Editar datos"
+                  return (
+                    <tr
+                      key={c.id}
+                      onClick={() => setHistoryCustomer(c)}
+                      className="hover:bg-[#F4F6F9]/70 dark:hover:bg-[#0F172A]/50 transition cursor-pointer"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="p-1.5 text-[#64748B] hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Detalles de contacto */}
-                <div className="mt-4 space-y-1.5 text-xs text-[#64748B] dark:text-[#94A3B8]">
-                  {c.phone ? (
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[#1E293B] dark:text-[#F8FAFC] font-semibold">
-                        {c.phone}
-                      </span>
-                      <a
-                        href={generateWhatsAppLink(
-                          c.phone,
-                          `Hola ${c.name}! Te escribo de Electro Cami.`
+                      {/* Cliente */}
+                      <td className="py-3.5 px-4 max-w-[260px]">
+                        <div className="font-bold text-sm text-[#1E293B] dark:text-[#F8FAFC]">
+                          {c.name} {c.lastName || ""}
+                        </div>
+                        {c.address && (
+                          <div className="flex items-center gap-1 text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-0.5 truncate">
+                            <MapPin className="w-3 h-3 shrink-0 text-[#94A3B8]" />
+                            <span className="truncate">{c.address}</span>
+                          </div>
                         )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:underline"
+                        {c.notes && (
+                          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] truncate mt-0.5">
+                            📝 {c.notes}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* WhatsApp */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {c.phone ? (
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-semibold text-[#1E293B] dark:text-[#F8FAFC]">
+                              {c.phone}
+                            </span>
+                            <a
+                              href={generateWhatsAppLink(
+                                c.phone,
+                                `Hola ${c.name}! Te escribo de Electro Cami.`
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition"
+                              title="Abrir WhatsApp"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              Chatear
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-[#94A3B8] italic text-[11px]">
+                            Sin WhatsApp
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Estado */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {c.score === "moroso" ? (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                              🔴 Moroso ({c.overdueCount}{" "}
+                              {c.overdueCount === 1 ? "vencida" : "vencidas"})
+                            </span>
+                          ) : c.score === "confiable" ? (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                              🟢 Confiable
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                              🟡 Al día / Nuevo
+                            </span>
+                          )}
+
+                          <span
+                            className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                              hasDebt
+                                ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                            }`}
+                          >
+                            {hasDebt ? "Con crédito" : "Sin deuda"}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Créditos */}
+                      <td className="py-3.5 px-4 whitespace-nowrap text-[#64748B] dark:text-[#94A3B8]">
+                        <span className="font-bold text-[#1E293B] dark:text-[#F8FAFC]">
+                          {c.activeCreditsCount ?? 0} activos
+                        </span>
+                        {(c.completedCreditsCount ?? 0) > 0 && (
+                          <span className="block text-[10px]">
+                            {c.completedCreditsCount} finalizados
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Saldo Pendiente */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        {debtArs > 0 && debtUsd > 0 ? (
+                          <div className="space-y-0.5">
+                            <span className="text-sm font-black text-[#1E293B] dark:text-[#F8FAFC] block">
+                              {formatCurrency(debtArs, "ARS")}
+                            </span>
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
+                              + {formatCurrency(debtUsd, "USD")}
+                            </span>
+                          </div>
+                        ) : debtUsd > 0 ? (
+                          <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(debtUsd, "USD")}
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-sm font-black ${
+                              debtArs > 0
+                                ? "text-[#1E293B] dark:text-[#F8FAFC]"
+                                : "text-blue-600 dark:text-blue-400"
+                            }`}
+                          >
+                            {formatCurrency(debtArs, "ARS")}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Acciones */}
+                      <td
+                        className="py-3.5 px-4 text-right whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        Chatear
-                      </a>
-                    </div>
-                  ) : (
-                    <p className="text-[#94A3B8] italic text-[11px]">Sin WhatsApp</p>
-                  )}
-
-                  {c.address && (
-                    <div className="flex items-center gap-1.5 text-[#64748B] dark:text-[#94A3B8] text-[11px]">
-                      <MapPin className="w-3.5 h-3.5 shrink-0 text-[#94A3B8]" />
-                      <span className="truncate">{c.address}</span>
-                    </div>
-                  )}
-
-                  {c.notes && (
-                    <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] bg-[#F4F6F9] dark:bg-[#0F172A] p-2 rounded-lg mt-2 border border-[#E5E7EB] dark:border-[#334155]">
-                      📝 {c.notes}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Saldo Activo */}
-              <div className="pt-3 border-t border-[#E5E7EB] dark:border-[#334155] flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-[#64748B] dark:text-[#94A3B8] block">
-                    Saldo Pendiente
-                  </span>
-                  {debtArs > 0 && debtUsd > 0 ? (
-                    <div className="space-y-0.5">
-                      <span className="text-sm font-black text-[#1E293B] dark:text-[#F8FAFC] block">
-                        {formatCurrency(debtArs, "ARS")}
-                      </span>
-                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
-                        + {formatCurrency(debtUsd, "USD")}
-                      </span>
-                    </div>
-                  ) : debtUsd > 0 ? (
-                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(debtUsd, "USD")}
-                    </span>
-                  ) : (
-                    <span
-                      className={`text-sm font-black ${
-                        debtArs > 0 ? "text-[#1E293B] dark:text-[#F8FAFC]" : "text-blue-600 dark:text-blue-400"
-                      }`}
-                    >
-                      {formatCurrency(debtArs, "ARS")}
-                    </span>
-                  )}
-                </div>
-
-                <div className="text-right">
-                  <span className="text-[10px] text-[#64748B] dark:text-[#94A3B8] block">Créditos</span>
-                  <span className="text-xs font-bold text-[#1E293B] dark:text-[#F8FAFC]">
-                    {c.activeCreditsCount} activos
-                  </span>
-                </div>
-              </div>
-            </div>
-            );
-          })
+                        <div className="inline-flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setHistoryCustomer(c)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
+                            title="Ver historial completo"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            Historial
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(c)}
+                            className="p-1.5 text-[#64748B] hover:text-[#1E293B] dark:text-[#94A3B8] dark:hover:text-[#F8FAFC] rounded-lg hover:bg-[#F4F6F9] dark:hover:bg-[#0F172A] transition cursor-pointer"
+                            title="Editar datos"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(c.id)}
+                            className="p-1.5 text-[#64748B] hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -494,6 +540,13 @@ export function CustomersView({ initialCustomers }: CustomersViewProps) {
           </div>
         </form>
       </Modal>
+
+      {/* MODAL HISTORIAL COMPLETO DEL CLIENTE */}
+      <CustomerHistoryModal
+        isOpen={Boolean(historyCustomer)}
+        onClose={() => setHistoryCustomer(null)}
+        customerSummary={historyCustomer}
+      />
     </div>
   );
 }
