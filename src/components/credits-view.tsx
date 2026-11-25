@@ -243,7 +243,7 @@ export function CreditsView({
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          + Nueva Venta en Cuotas
+          Nueva Venta en Cuotas
         </button>
       </div>
 
@@ -263,7 +263,7 @@ export function CreditsView({
           />
         </div>
 
-        <div className="flex gap-1.5 bg-[#E5E7EB]/60 dark:bg-[#0F172A] p-1 rounded-xl self-start border border-[#E5E7EB] dark:border-[#334155]">
+        <div className="flex gap-1.5 bg-[#E5E7EB]/60 dark:bg-[#0F172A] p-1 rounded-xl self-start border border-[#E5E7EB] dark:border-[#334155] overflow-x-auto max-w-full scrollbar-none">
           {[
             { id: "activo", label: "Activos" },
             { id: "finalizado", label: "Finalizados" },
@@ -276,7 +276,7 @@ export function CreditsView({
                 setFilterStatus(tab.id);
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                 filterStatus === tab.id
                   ? "bg-white dark:bg-[#1E293B] text-[#1E293B] dark:text-[#F8FAFC] shadow-xs"
                   : "text-[#64748B] dark:text-[#94A3B8] hover:text-[#1E293B] dark:hover:text-[#F8FAFC]"
@@ -376,8 +376,11 @@ export function CreditsView({
                       <span>Inicio: {formatDate(cred.startDate)}</span>
                       <span>•</span>
                       <span>
-                        Plan: {cred.installmentCount} cuotas {cred.frequency}es de{" "}
-                        {formatCurrency(cred.installmentAmount, cred.currency || "ARS")}
+                        Plan: {cred.installmentCount} cuotas{" "}
+                        {cred.frequency === "dias"
+                          ? `cada ${cred.frequencyDays || 7} días`
+                          : `${cred.frequency}es`}{" "}
+                        de {formatCurrency(cred.installmentAmount, cred.currency || "ARS")}
                       </span>
                       <span>•</span>
                       <span>Interés: {cred.interestRate}%</span>

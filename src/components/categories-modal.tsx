@@ -220,7 +220,7 @@ export function CategoriesModal({
             className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Crear Categoría</span>
+            <span>Crear Categoría</span>
           </button>
         </form>
 
@@ -435,7 +435,7 @@ export function CategoriesModal({
                           className="pt-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3 h-3" />
-                          <span>+ Agregar subcategoría en {cat.name}</span>
+                          <span>Agregar subcategoría en {cat.name}</span>
                         </button>
                       )}
                     </div>

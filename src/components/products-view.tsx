@@ -341,7 +341,7 @@ export function ProductsView({
             title="Crear y organizar categorías y subcategorías"
           >
             <Tag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span>🏷️ Categorías</span>
+            <span>Categorías</span>
           </button>
 
           <button
@@ -349,7 +349,7 @@ export function ProductsView({
             className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Agregar Producto</span>
+            <span>Agregar Producto</span>
           </button>
         </div>
       </div>
@@ -605,7 +605,7 @@ export function ProductsView({
                       title="Registrar compra o reposición de stock para este producto"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>+ Comprar Stock</span>
+                      <span>Comprar Stock</span>
                     </button>
                   </div>
 

@@ -222,7 +222,7 @@ export function NewCreditModal({
                 className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1.5 cursor-pointer"
               >
                 <UserPlus className="w-4 h-4" />
-                {isCreatingCustomer ? "Elegir de lista" : "+ Crear nuevo cliente"}
+                {isCreatingCustomer ? "Elegir de lista" : "Crear nuevo cliente"}
               </button>
             </div>
 

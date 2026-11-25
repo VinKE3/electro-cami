@@ -37,7 +37,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-[#1E293B] border-r border-[#E5E7EB] dark:border-[#334155] min-h-screen p-4 sticky top-0 h-screen transition-colors duration-200">
+    <aside className="hidden md:flex flex-col w-64 shrink-0 bg-white dark:bg-[#1E293B] border-r border-[#E5E7EB] dark:border-[#334155] p-4 sticky top-0 h-screen overflow-y-auto transition-colors duration-200">
       {/* Brand */}
       <div className="flex items-center gap-3 px-3 py-4 mb-4 border-b border-[#E5E7EB] dark:border-[#334155]">
         <div className="w-10 h-10 rounded-2xl bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 font-bold text-xl">
@@ -55,7 +55,10 @@ export function AdminSidebar() {
       <nav className="flex-1 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive =
+            item.href === "/admin"
+              ? pathname === "/admin"
+              : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
@@ -120,10 +123,10 @@ export function AdminMobileNav() {
     if (isMoreOpen) {
       document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
     }
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
     };
   }, [isMoreOpen]);
 
@@ -170,7 +173,10 @@ export function AdminMobileNav() {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#1E293B]/95 backdrop-blur-md border-t border-[#E5E7EB] dark:border-[#334155] px-1 py-1 flex items-center justify-between w-full max-w-full">
         {mainMobileNav.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive =
+            item.href === "/admin"
+              ? pathname === "/admin"
+              : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
@@ -211,12 +217,12 @@ export function AdminMobileNav() {
         <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
           {/* Backdrop con desenfoque */}
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in"
             onClick={() => setIsMoreOpen(false)}
           />
 
           {/* Contenido del Sheet */}
-          <div className="relative z-10 bg-white dark:bg-[#1E293B] rounded-t-3xl border-t border-[#E5E7EB] dark:border-[#334155] p-5 shadow-2xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
+          <div className="relative z-10 bg-white dark:bg-[#1E293B] rounded-t-3xl border-t border-[#E5E7EB] dark:border-[#334155] p-5 shadow-2xl max-h-[85vh] overflow-y-auto animate-slide-up">
             {/* Tirador visual */}
             <div className="w-12 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto mb-3" />
 

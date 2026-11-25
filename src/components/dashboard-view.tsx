@@ -337,13 +337,13 @@ export function DashboardView({
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-[#F4F6F9] dark:bg-[#0F172A] p-1 rounded-xl text-xs font-bold border border-[#E5E7EB] dark:border-[#334155]">
+          <div className="flex items-center gap-1.5 bg-[#F4F6F9] dark:bg-[#0F172A] p-1 rounded-xl text-xs font-bold border border-[#E5E7EB] dark:border-[#334155] overflow-x-auto max-w-full scrollbar-none">
             <button
               onClick={() => {
                 setActiveTab("vencidas");
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === "vencidas"
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${activeTab === "vencidas"
                   ? "bg-rose-600 text-white shadow-xs"
                   : "text-[#64748B] dark:text-[#94A3B8] hover:text-[#1E293B] dark:hover:text-[#F8FAFC]"
                 }`}
@@ -357,7 +357,7 @@ export function DashboardView({
                 setActiveTab("hoy");
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === "hoy"
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${activeTab === "hoy"
                   ? "bg-amber-500 text-white shadow-xs"
                   : "text-[#64748B] dark:text-[#94A3B8] hover:text-[#1E293B] dark:hover:text-[#F8FAFC]"
                 }`}
@@ -371,7 +371,7 @@ export function DashboardView({
                 setActiveTab("semana");
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === "semana"
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${activeTab === "semana"
                   ? "bg-blue-600 dark:bg-blue-500 text-white shadow-xs"
                   : "text-[#64748B] dark:text-[#94A3B8] hover:text-[#1E293B] dark:hover:text-[#F8FAFC]"
                 }`}

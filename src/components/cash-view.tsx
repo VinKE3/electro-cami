@@ -513,7 +513,7 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
             className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer text-center"
           >
             <Minus className="w-4 h-4 shrink-0" />
-            <span className="truncate">- Gasto</span>
+            <span className="truncate">Gasto</span>
           </button>
 
           <button
@@ -521,7 +521,7 @@ export function CashView({ initialData, products = [] }: CashViewProps) {
             className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer text-center"
           >
             <Plus className="w-4 h-4 shrink-0" />
-            <span className="truncate">+ Ingreso</span>
+            <span className="truncate">Ingreso</span>
           </button>
         </div>
       </div>

@@ -144,7 +144,7 @@ export function SuppliersView({ initialSuppliers }: SuppliersViewProps) {
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          + Agregar Proveedor
+          Agregar Proveedor
         </button>
       </div>
 
