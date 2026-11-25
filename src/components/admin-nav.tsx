@@ -63,7 +63,7 @@ export function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
                 isActive
                   ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold shadow-xs border border-blue-200/50 dark:border-blue-900/50"
                   : "text-[#64748B] dark:text-[#94A3B8] hover:bg-[#F4F6F9] dark:hover:bg-[#283548] hover:text-[#1E293B] dark:hover:text-[#F8FAFC]"
@@ -404,7 +404,7 @@ export function AdminHeader() {
           title="Ver Catálogo Público"
         >
           <Store className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-          <span className="hidden sm:inline">Pública</span>
+          <span className="hidden sm:inline">Catálogo</span>
         </Link>
 
         <form action={logout} className="md:hidden shrink-0">

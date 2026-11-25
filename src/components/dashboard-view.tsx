@@ -2,7 +2,12 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { formatCurrency, formatDate, generateWhatsAppLink } from "@/lib/utils";
+import {
+  formatCurrency,
+  formatDate,
+  generateWhatsAppLink,
+  getArgentinaTodayStr,
+} from "@/lib/utils";
 import { PaymentModal } from "./payment-modal";
 import { WhatsAppModal } from "./whatsapp-modal";
 import { NewCreditModal } from "./new-credit-modal";
@@ -44,6 +49,26 @@ interface DashboardViewProps {
   };
   customers: any[];
   products: any[];
+}
+
+function formatMonthLabel(monthPrefix?: string): string {
+  if (!monthPrefix || !/^\d{4}-\d{2}$/.test(monthPrefix)) return "Mes actual";
+  const [year, month] = monthPrefix.split("-").map(Number);
+  const formatted = new Intl.DateTimeFormat("es-AR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 15)));
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+function getOverdueDays(dueDateStr: string, todayStr: string): number {
+  if (!dueDateStr || !todayStr || dueDateStr >= todayStr) return 0;
+  const [dy, dm, dd] = dueDateStr.split("-").map(Number);
+  const [ty, tm, td] = todayStr.split("-").map(Number);
+  const dueUtc = Date.UTC(dy, dm - 1, dd, 12, 0, 0);
+  const todayUtc = Date.UTC(ty, tm - 1, td, 12, 0, 0);
+  return Math.max(0, Math.round((todayUtc - dueUtc) / 86400000));
 }
 
 export function DashboardView({
@@ -95,6 +120,7 @@ export function DashboardView({
   const [activeTab, setActiveTab] = useState<"vencidas" | "hoy" | "semana">("vencidas");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const todayStr = getArgentinaTodayStr();
 
   const openWhatsAppForInstallment = (inst: any) => {
     const cust = inst.credit.customer;
@@ -153,12 +179,12 @@ export function DashboardView({
   return (
     <div className="space-y-6 animate-fade-in">
       {/* HEADER PRINCIPAL CON BOTÓN DESTACADO */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#1E293B] p-6 rounded-3xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-3xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs">
         <div>
-          <span className="inline-block px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-xs font-bold mb-2">
+          <span className="inline-block px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-xs font-bold mb-1.5">
             Panel de Cobranzas • Electro Cami
           </span>
-          <h2 className="text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC] tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC] tracking-tight">
             Gestión de Cuotas & Negocio
           </h2>
           <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-1 font-medium">
@@ -168,7 +194,7 @@ export function DashboardView({
 
         <button
           onClick={() => setIsNewCreditOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-500/25 active:scale-95 transition cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-500/25 active:scale-95 transition cursor-pointer shrink-0"
         >
           <Plus className="w-5 h-5" />
           Nueva Venta en Cuotas
@@ -178,90 +204,117 @@ export function DashboardView({
       {/* METRICAS FINANCIERAS CLAVE */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Total en la Calle */}
-        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Dinero pendiente</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
+        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Dinero pendiente</span>
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4" />
+              </div>
             </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC]">
-            {formatCurrency(overview.totalInTheStreet, "ARS")}
-          </div>
-          {overview.totalInTheStreetUsd && overview.totalInTheStreetUsd > 0 ? (
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md w-fit">
-              💵 + {formatCurrency(overview.totalInTheStreetUsd, "USD")} en cuotas USD
+            <div className="text-xl sm:text-2xl font-black text-[#1E293B] dark:text-[#F8FAFC]">
+              {formatCurrency(overview.totalInTheStreet, "ARS")}
             </div>
-          ) : null}
-          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
-            {overview.activeCreditsCount} créditos activos por cobrar
-          </p>
+            {overview.totalInTheStreetUsd && overview.totalInTheStreetUsd > 0 ? (
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md w-fit">
+                💵 + {formatCurrency(overview.totalInTheStreetUsd, "USD")} en cuotas USD
+              </div>
+            ) : null}
+            <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+              {overview.activeCreditsCount} créditos activos por cobrar
+            </p>
+          </div>
+          <Link
+            href="/admin/creditos"
+            className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 w-full"
+          >
+            Ver créditos activos &rarr;
+          </Link>
         </div>
 
         {/* Efectivo en Mano */}
-        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Efectivo en Mano</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <Banknote className="w-4 h-4" />
+        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Efectivo en Mano</span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Banknote className="w-4 h-4" />
+              </div>
             </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
-            {formatCurrency(overview.cashInHand)}
-          </div>
-          {overview.dolaresEfectivoTotal && overview.dolaresEfectivoTotal > 0 ? (
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md w-fit">
-              💵 + {formatCurrency(overview.dolaresEfectivoTotal, "USD")} billetes
+            <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(overview.cashInHand)}
             </div>
-          ) : (
-            <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
-              Billetes físicos en caja
-            </p>
-          )}
+            {overview.dolaresEfectivoTotal && overview.dolaresEfectivoTotal > 0 ? (
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md w-fit">
+                💵 + {formatCurrency(overview.dolaresEfectivoTotal, "USD")} billetes
+              </div>
+            ) : (
+              <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+                Billetes físicos en caja
+              </p>
+            )}
+          </div>
           <Link
             href="/admin/caja"
-            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline mt-2 pt-1 border-t border-slate-100 dark:border-slate-800 w-full"
+            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 w-full"
           >
             Ajustar o ver caja &rarr;
           </Link>
         </div>
 
         {/* Mercado Pago */}
-        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs">
-          <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
-            <span className="text-xs font-semibold">Mercado Pago / Transf.</span>
-            <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 flex items-center justify-center">
-              <CreditCard className="w-4 h-4" />
+        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#64748B] dark:text-[#94A3B8] mb-2">
+              <span className="text-xs font-semibold">Mercado Pago / Transf.</span>
+              <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                <CreditCard className="w-4 h-4" />
+              </div>
             </div>
+            <div className="text-xl sm:text-2xl font-black text-sky-600 dark:text-sky-400">
+              {formatCurrency(overview.mercadoPagoBalance)}
+            </div>
+            <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+              Cobrado digitalmente
+            </p>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-sky-600 dark:text-sky-400">
-            {formatCurrency(overview.mercadoPagoBalance)}
-          </div>
-          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
-            Cobrado digitalmente
-          </p>
           <Link
             href="/admin/caja"
-            className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 hover:underline mt-2 pt-1 border-t border-slate-100 dark:border-slate-800 w-full"
+            className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 hover:underline mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 w-full"
           >
             Ajustar o ver caja &rarr;
           </Link>
         </div>
 
         {/* Alertas de Cobro (Vencidas) */}
-        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/20 shadow-xs">
-          <div className="flex items-center justify-between text-rose-600 mb-2">
-            <span className="text-xs font-semibold">Cuotas Atrasadas</span>
-            <div className="w-8 h-8 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4" />
+        <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/20 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-rose-600 mb-2">
+              <span className="text-xs font-semibold">Cuotas Atrasadas</span>
+              <div className="w-8 h-8 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
             </div>
+            <div className="text-xl sm:text-2xl font-black text-rose-600">
+              {overview.overdue.length} cuotas
+            </div>
+            <p className="text-[11px] text-rose-500/80 mt-1">
+              Requieren aviso o cobranza
+            </p>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-rose-600">
-            {overview.overdue.length} cuotas
-          </div>
-          <p className="text-[11px] text-rose-500/80 mt-1">
-            Requieren aviso o cobranza
-          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("vencidas");
+              setCurrentPage(1);
+              document
+                .getElementById("centro-cobranzas")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:underline mt-2 pt-1.5 border-t border-rose-200/60 dark:border-rose-900/40 w-full text-left cursor-pointer"
+          >
+            Ver atrasadas &darr;
+          </button>
         </div>
       </div>
 
@@ -270,7 +323,7 @@ export function DashboardView({
         <div className="bg-white dark:bg-[#1E293B] p-4 sm:p-5 rounded-2xl border border-[#E5E7EB] dark:border-[#334155] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              Rendimiento del Mes ({overview.monthlyProfit.monthPrefix || "Actual"})
+              Rendimiento del Mes • {formatMonthLabel(overview.monthlyProfit.monthPrefix)}
             </span>
             <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mt-0.5">
               {overview.monthlyProfit.salesCount}{" "}
@@ -325,7 +378,10 @@ export function DashboardView({
       )}
 
       {/* SECCIÓN PRINCIPAL DE COBRANZAS: PESTAÑAS Y LISTADO */}
-      <div className="bg-white dark:bg-[#1E293B] rounded-3xl border border-[#E5E7EB] dark:border-[#334155] overflow-hidden shadow-xs">
+      <div
+        id="centro-cobranzas"
+        className="bg-white dark:bg-[#1E293B] rounded-3xl border border-[#E5E7EB] dark:border-[#334155] overflow-hidden shadow-xs"
+      >
         {/* Barra de pestañas */}
         <div className="p-4 sm:p-5 border-b border-[#E5E7EB] dark:border-[#334155] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -464,8 +520,14 @@ export function DashboardView({
                         {inst.credit.concept}
                       </p>
 
-                      <div className="flex items-center gap-3 text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-[#64748B] dark:text-[#94A3B8] mt-1">
                         <span>Vencimiento: {formatDate(inst.dueDate)}</span>
+                        {activeTab === "vencidas" && getOverdueDays(inst.dueDate, todayStr) > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-bold text-[10px]">
+                            Hace {getOverdueDays(inst.dueDate, todayStr)}{" "}
+                            {getOverdueDays(inst.dueDate, todayStr) === 1 ? "día" : "días"}
+                          </span>
+                        )}
                         <span>•</span>
                         <span>Saldo crédito: {formatCurrency(remainingCreditDebt, credCurrency)}</span>
                       </div>
